@@ -136,7 +136,7 @@ export function validateTaskInput(input) {
 
 export function makeTask(input, id = Date.now()) {
   const now = Date.now();
-  return normalizeTask({ id, text: input.text, completed: false, createdAt: now, updatedAt: now, completedAt: null, dueDate: input.dueDate || null, priority: input.priority || 'medium', category: input.category || null });
+  return normalizeTask({ id, text: input.text, completed: false, createdAt: now, updatedAt: now, completedAt: null, dueDate: input.dueDate || null, priority: input.priority || 'medium', category: input.category || null, estimateMinutes: input.estimateMinutes || 25 });
 }
 
 export function updateStreak(progress, dateKey) {

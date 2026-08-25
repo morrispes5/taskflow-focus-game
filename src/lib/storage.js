@@ -11,6 +11,7 @@ export const STORAGE_KEYS = {
 export const MAX_TASK_LENGTH = 120;
 export const MAX_CATEGORY_LENGTH = 32;
 export const PRIORITIES = ['high', 'medium', 'low'];
+export const ESTIMATE_OPTIONS = [15, 25, 50, 90];
 export const PRIORITY_LABELS = { high: 'Tinggi', medium: 'Sedang', low: 'Rendah' };
 
 const DEFAULT_PROFILE = { name: 'Vio', tagline: 'Ruang produktif harian' };
@@ -48,7 +49,8 @@ export function normalizeTask(raw, index = 0) {
     completedAt: completed && Number.isFinite(Number(raw.completedAt)) ? Number(raw.completedAt) : null,
     dueDate: isDateString(raw.dueDate) ? raw.dueDate : null,
     priority: PRIORITIES.includes(raw.priority) ? raw.priority : 'medium',
-    category: String(raw.category ?? '').trim().slice(0, MAX_CATEGORY_LENGTH) || null
+    category: String(raw.category ?? '').trim().slice(0, MAX_CATEGORY_LENGTH) || null,
+    estimateMinutes: ESTIMATE_OPTIONS.includes(Number(raw.estimateMinutes)) ? Number(raw.estimateMinutes) : 25
   };
 }
 
@@ -101,9 +103,9 @@ export function createDemoTasks() {
     return `${value.getFullYear()}-${month}-${day}`;
   };
   return [
-    { id: 1, text: 'Pelajari struktur HTML dan CSS', completed: true, createdAt: now - 172800000, updatedAt: now - 86400000, completedAt: now - 86400000, dueDate: dateString(-1), priority: 'medium', category: 'Kuliah' },
-    { id: 2, text: 'Hubungkan React ke halaman beranda', completed: false, createdAt: now - 3600000, updatedAt: now - 3600000, completedAt: null, dueDate: dateString(0), priority: 'high', category: 'Proyek' },
-    { id: 3, text: 'Buat wireframe halaman Focus Run', completed: false, createdAt: now - 1800000, updatedAt: now - 1800000, completedAt: null, dueDate: dateString(1), priority: 'medium', category: 'Desain' }
+    { id: 1, text: 'Pelajari struktur HTML dan CSS', completed: true, createdAt: now - 172800000, updatedAt: now - 86400000, completedAt: now - 86400000, dueDate: dateString(-1), priority: 'medium', category: 'Kuliah', estimateMinutes: 25 },
+    { id: 2, text: 'Hubungkan React ke halaman beranda', completed: false, createdAt: now - 3600000, updatedAt: now - 3600000, completedAt: null, dueDate: dateString(0), priority: 'high', category: 'Proyek', estimateMinutes: 50 },
+    { id: 3, text: 'Buat wireframe halaman Focus Run', completed: false, createdAt: now - 1800000, updatedAt: now - 1800000, completedAt: null, dueDate: dateString(1), priority: 'medium', category: 'Desain', estimateMinutes: 25 }
   ];
 }
 

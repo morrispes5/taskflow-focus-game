@@ -143,6 +143,7 @@
 .task-meta > span { display: inline-flex; align-items: center; gap: 4px; }
 .task-due-danger { color: var(--color-coral); font-weight: 800; }
 .task-due-focus { color: var(--color-focus); font-weight: 800; }
+.task-estimate { color: var(--color-muted); }
 .task-reward { color: var(--color-mint-dark); font-weight: 760; }
 .priority-badge, .category-badge { display: inline-flex; align-items: center; min-height: 21px; padding: 0 7px; border-radius: 999px; font-size: 0.65rem; font-weight: 820; white-space: nowrap; }
 .priority-high { background: var(--color-coral-soft); color: var(--color-coral); }
@@ -166,6 +167,7 @@
 .form-error, .field-error { min-height: 1.2rem; color: var(--color-coral); font-size: 0.77rem; font-weight: 730; }
 .form-error { margin-top: -7px; }
 .field-error { margin-top: 3px; }
+.field-help { margin: 0; color: var(--color-muted); font-size: 0.72rem; }
 .field-group { display: grid; gap: 6px; }
 .field-group label { font-size: 0.82rem; font-weight: 780; }
 .label-hint { color: var(--color-muted); font-size: 0.72rem; font-weight: 500; }

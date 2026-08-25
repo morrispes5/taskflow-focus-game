@@ -203,7 +203,7 @@ function TaskRow({ task, onToggle, onEdit, onDelete, compact = false }) {
       </label>
       <div className="task-details">
         <div className="task-title-line"><span className="task-text">{task.text}</span><span className={`priority-badge priority-${task.priority}`}>{task.priority === 'high' ? 'Tinggi' : task.priority === 'medium' ? 'Sedang' : 'Rendah'}</span></div>
-        <div className="task-meta"><span className={`task-due task-due-${due.tone}`}><CalendarClock size={13} aria-hidden="true" />{due.label}</span>{task.category && <span className="category-badge">{task.category}</span>}<span className="task-reward"><Zap size={12} aria-hidden="true" />+{getTaskXp(task)} XP</span></div>
+        <div className="task-meta"><span className={`task-due task-due-${due.tone}`}><CalendarClock size={13} aria-hidden="true" />{due.label}</span>{task.category && <span className="category-badge">{task.category}</span>}<span className="task-estimate"><Clock3 size={12} aria-hidden="true" />{task.estimateMinutes} m fokus</span><span className="task-reward"><Zap size={12} aria-hidden="true" />+{getTaskXp(task)} XP</span></div>
       </div>
       {!compact && <div className="task-actions"><a className="icon-button" href={`focus.html?taskId=${task.id}`} aria-label={`Mulai fokus: ${task.text}`} title="Mulai Focus Run"><Play size={16} fill="currentColor" /></a><button className="icon-button" type="button" onClick={() => onEdit(task)} aria-label={`Edit tugas: ${task.text}`} title="Edit tugas"><Pencil size={16} /></button><button className="icon-button danger-hover" type="button" onClick={() => onDelete(task)} aria-label={`Hapus tugas: ${task.text}`} title="Hapus tugas"><Trash2 size={16} /></button></div>}
     </motion.li>
@@ -226,12 +226,12 @@ function Modal({ open, onClose, title, eyebrow = 'TaskFlow', children, compact =
 }
 
 function TaskDialog({ open, task, onClose, onSave }) {
-  const [form, setForm] = useState({ text: '', dueDate: '', priority: 'medium', category: '' });
+  const [form, setForm] = useState({ text: '', dueDate: '', priority: 'medium', category: '', estimateMinutes: 25 });
   const [error, setError] = useState(null);
   const inputRef = useRef(null);
   useEffect(() => {
     if (!open) return;
-    setForm({ text: task?.text || '', dueDate: task?.dueDate || '', priority: task?.priority || 'medium', category: task?.category || '' });
+    setForm({ text: task?.text || '', dueDate: task?.dueDate || '', priority: task?.priority || 'medium', category: task?.category || '', estimateMinutes: task?.estimateMinutes || 25 });
     setError(null);
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [open, task]);
@@ -240,6 +240,7 @@ function TaskDialog({ open, task, onClose, onSave }) {
   return <Modal open={open} onClose={onClose} title={task ? 'Edit tugas' : 'Tambah tugas'} eyebrow="Atur misi"><form className="form-stack" onSubmit={submit}>
     <div className="field-group"><label htmlFor="task-title">Judul tugas <span aria-hidden="true">*</span></label><input ref={inputRef} id="task-title" className="input" value={form.text} onChange={(event) => setField('text', event.target.value)} maxLength={120} aria-invalid={error?.field === 'text'} aria-describedby="task-title-error" autoComplete="off" /><p id="task-title-error" className="field-error" role="alert">{error?.field === 'text' ? error.message : ''}</p></div>
     <div className="form-grid-two"><div className="field-group"><label htmlFor="task-due">Deadline <span className="label-hint">opsional</span></label><input id="task-due" className="input" type="date" value={form.dueDate} onChange={(event) => setField('dueDate', event.target.value)} aria-invalid={error?.field === 'dueDate'} /><p className="field-error">{error?.field === 'dueDate' ? error.message : ''}</p></div><div className="field-group"><label htmlFor="task-priority">Prioritas</label><select id="task-priority" className="input" value={form.priority} onChange={(event) => setField('priority', event.target.value)}><option value="high">Tinggi</option><option value="medium">Sedang</option><option value="low">Rendah</option></select></div></div>
+    <div className="field-group"><label htmlFor="task-estimate">Estimasi fokus</label><select id="task-estimate" className="input" value={form.estimateMinutes} onChange={(event) => setField('estimateMinutes', Number(event.target.value))}><option value="15">15 menit · cepat</option><option value="25">25 menit · standar</option><option value="50">50 menit · mendalam</option><option value="90">90 menit · panjang</option></select><p className="field-help">Pilih durasi yang realistis untuk satu sesi.</p></div>
     <div className="field-group"><label htmlFor="task-category">Kategori / mata pelajaran <span className="label-hint">opsional</span></label><input id="task-category" className="input" value={form.category} onChange={(event) => setField('category', event.target.value)} maxLength={32} placeholder="Contoh: Matematika" list="category-suggestions" aria-invalid={error?.field === 'category'} /><datalist id="category-suggestions"><option value="Kuliah" /><option value="Proyek" /><option value="Organisasi" /><option value="Pribadi" /></datalist><p className="field-error" role="alert">{error?.field === 'category' ? error.message : ''}</p></div>
     <div className="dialog-footer"><button className="btn btn-secondary" type="button" onClick={onClose}>Batal</button><button className="btn btn-primary" type="submit"><Check size={16} />Simpan tugas</button></div>
   </form></Modal>;
@@ -257,7 +258,7 @@ function HomePage({ data, commit, toggleTask }) {
   const mission = selectDailyMission(data.tasks);
   const focusTasks = sortTasks(data.tasks.filter((task) => !task.completed), 'dueSoon').slice(0, 5);
   const levelProgress = data.progress.totalXp % 100;
-  const saveTask = (input, id) => commit((current) => id ? ({ ...current, tasks: current.tasks.map((task) => task.id === id ? { ...task, ...input, category: input.category.trim() || null, dueDate: input.dueDate || null, updatedAt: Date.now() } : task) }) : ({ ...current, tasks: [makeTask(input), ...current.tasks] }), id ? 'Tugas diperbarui.' : 'Tugas ditambahkan.');
+  const saveTask = (input, id) => commit((current) => id ? ({ ...current, tasks: current.tasks.map((task) => task.id === id ? { ...task, ...input, category: input.category.trim() || null, dueDate: input.dueDate || null, estimateMinutes: Number(input.estimateMinutes) || 25, updatedAt: Date.now() } : task) }) : ({ ...current, tasks: [makeTask(input), ...current.tasks] }), id ? 'Tugas diperbarui.' : 'Tugas ditambahkan.');
   useEffect(() => {
     const animation = playHeroSequence(heroRef.current, reduced);
     return () => animation?.pause?.();
@@ -279,7 +280,7 @@ function HomePage({ data, commit, toggleTask }) {
         <p className="preview-label">Misi yang sedang kamu pilih</p>
         <h2>{mission ? mission.text : 'Ruang fokusmu siap diisi.'}</h2>
         <div className="preview-meta"><span>{mission ? getDueInfo(mission).label : 'Tambahkan tugas'}</span>{mission?.category && <span>{mission.category}</span>}</div>
-        <div className="preview-focus-row"><div className="preview-timer"><strong>25:00</strong><span>durasi awal</span></div><Illustration type="focus-run" alt="Ilustrasi Focus Run" className="preview-illustration" /></div>
+        <div className="preview-focus-row"><div className="preview-timer"><strong>{mission?.estimateMinutes || 25}:00</strong><span>durasi awal</span></div><Illustration type="focus-run" alt="Ilustrasi Focus Run" className="preview-illustration" /></div>
         <div className="preview-footer"><span><Zap size={14} />+{mission ? getTaskXp(mission) : 0} XP saat selesai</span><span className="preview-arrow"><ArrowRight size={16} /></span></div>
       </motion.div>
     </motion.section>
@@ -319,7 +320,7 @@ function TasksPage({ data, commit, toggleTask }) {
   }, []);
   const categories = [...new Set(data.tasks.map((task) => task.category || 'Tanpa kategori'))].sort((a, b) => a.localeCompare(b, 'id'));
   const visibleTasks = sortTasks(filterTasks(data.tasks, { status, priority, category, search }), sort);
-  const saveTask = (input, id) => commit((current) => id ? ({ ...current, tasks: current.tasks.map((task) => task.id === id ? { ...task, text: input.text.trim(), dueDate: input.dueDate || null, priority: input.priority, category: input.category.trim() || null, updatedAt: Date.now() } : task) }) : ({ ...current, tasks: [makeTask(input), ...current.tasks] }), id ? 'Tugas diperbarui.' : 'Tugas ditambahkan.');
+  const saveTask = (input, id) => commit((current) => id ? ({ ...current, tasks: current.tasks.map((task) => task.id === id ? { ...task, text: input.text.trim(), dueDate: input.dueDate || null, priority: input.priority, category: input.category.trim() || null, estimateMinutes: Number(input.estimateMinutes) || 25, updatedAt: Date.now() } : task) }) : ({ ...current, tasks: [makeTask(input), ...current.tasks] }), id ? 'Tugas diperbarui.' : 'Tugas ditambahkan.');
   const addQuick = (event) => { event.preventDefault(); const validation = validateTaskInput({ text: quickText }); if (validation) { setQuickError(validation.message); return; } saveTask({ text: quickText, priority: 'medium', category: '', dueDate: '' }); setQuickText(''); setQuickError(''); };
   return <>
     <section className="task-capture card"><div className="capture-title"><div><p className="section-kicker">Tangkap cepat</p><h2>Apa yang ingin kamu selesaikan?</h2></div><span className="shortcut-hint">Tekan N untuk mulai, Enter untuk tambah</span></div><form className="quick-add-form" onSubmit={addQuick}><label className="sr-only" htmlFor="quick-task">Judul tugas baru</label><input ref={quickInputRef} id="quick-task" className="input input-large" value={quickText} onChange={(event) => { setQuickText(event.target.value); setQuickError(''); }} placeholder="Contoh: Selesaikan outline presentasi" maxLength={120} aria-invalid={Boolean(quickError)} /><button className="btn btn-primary" type="submit"><Zap size={16} />Tambah cepat</button><button className="btn btn-secondary" type="button" onClick={() => setDialogTask({})}><MoreHorizontal size={17} />Tambah detail</button></form>{quickError && <p className="form-error" role="alert">{quickError}</p>}</section>

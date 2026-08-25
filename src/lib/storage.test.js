@@ -9,6 +9,7 @@ describe('storage migration', () => {
     expect(migrated.dueDate).toBeNull();
     expect(migrated.completedAt).toBeNull();
     expect(migrated.updatedAt).toBe(100);
+    expect(migrated.estimateMinutes).toBe(25);
   });
 
   it('menerima backup lama berbentuk array', () => {

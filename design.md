@@ -271,7 +271,7 @@ Motion harus terasa seperti satu bahasa, bukan kumpulan efek.
 
 ### Strategi teknis
 
-Fase pertama tetap menggunakan vanilla HTML, CSS, dan JavaScript. Implementasi motion memakai CSS transitions/keyframes dan Web Animations API seperlunya. Tidak ada migrasi React atau dependency Framer Motion pada fase redesign awal.
+TaskFlow menggunakan React + Vite multi-page agar Beranda, Tugas, Fokus, Analitik, dan Pengaturan tetap terasa sebagai area kerja yang jelas. Motion for React menangani transisi/layout, sedangkan Anime.js dipakai untuk sequence reward dan entrance yang singkat. Data tetap offline melalui `localStorage`.
 
 ## 9. Data Contract Tahap Berikutnya
 
@@ -288,7 +288,8 @@ taskflow_tasks = [
     completedAt: Number | null,
     dueDate: String | null,
     priority: 'low' | 'medium' | 'high',
-    category: String | null
+    category: String | null,
+    estimateMinutes: 15 | 25 | 50 | 90
   }
 ]
 ```
