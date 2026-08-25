@@ -132,6 +132,7 @@ export default function TaskFlowApp() {
       profile: { ...current.profile, name: input.name.trim(), role: input.role, goal: input.goal.trim() },
       onboarding: { ...current.onboarding, profileCompleted: true, tutorialCompleted: false, tutorialSkipped: false, completedAt }
     }), 'Profil tersimpan.');
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     setTourOpen(true);
   };
 
@@ -216,10 +217,10 @@ function ProfileGate({ profile, onComplete }) {
 }
 
 const TOUR_STEPS = [
-  { title: 'Ini ruang fokusmu', description: 'Beranda merangkum misi, progres, dan langkah yang paling masuk akal untukmu hari ini.', selectors: ['.home-hero', '[data-tour="home"]', '.page-heading', '.task-capture'] },
-  { title: 'Tangkap tugas tanpa ribet', description: 'Gunakan halaman Tugas untuk menulis cepat atau menambahkan deadline, prioritas, dan estimasi fokus.', selectors: ['.task-capture', '[data-tour="tasks"]'] },
+  { title: 'Ini ruang fokusmu', description: 'Beranda merangkum misi, progres, dan langkah yang paling masuk akal untukmu hari ini.', selectors: ['.home-hero-preview', '[data-tour="recommendations"]', '[data-tour="tasks"]', '.home-hero'] },
+  { title: 'Tangkap tugas tanpa ribet', description: 'Gunakan halaman Tugas untuk menulis cepat atau menambahkan deadline, prioritas, dan estimasi fokus.', selectors: ['.task-capture', '.home-hero [data-tour="tasks"]', '[data-tour="tasks"]'] },
   { title: 'Jalankan satu sesi fokus', description: 'Focus Run membantu kamu memberi waktu utuh untuk satu misi tanpa membuat daftar terasa berat.', selectors: ['.mission-card', '.home-hero-preview', '.focus-stage', '[data-tour="focus"]', '.task-results'] },
-  { title: 'Baca ritmemu', description: 'Analitik menunjukkan pola yang benar-benar terjadi dari task dan sesi yang kamu selesaikan.', selectors: ['.summary-card', '.analytics-stats', '[data-tour="analytics"]', '.analytics-columns', '.task-results'] }
+  { title: 'Baca ritmemu', description: 'Analitik menunjukkan pola yang benar-benar terjadi dari task dan sesi yang kamu selesaikan.', selectors: ['.summary-lines', '.analytics-stats', '.summary-card', '[data-tour="analytics"]', '.analytics-columns', '.task-results'] }
 ];
 
 function OnboardingTour({ onComplete, onSkip }) {
@@ -234,6 +235,10 @@ function OnboardingTour({ onComplete, onSkip }) {
         return rect && rect.width > 0 && rect.height > 0;
       });
       if (!target) { setTargetRect(null); return; }
+      const rectBeforeScroll = target.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      const isOutsideViewport = rectBeforeScroll.top < 72 || rectBeforeScroll.bottom > viewportHeight - 170;
+      if (isOutsideViewport) target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
       const rect = target.getBoundingClientRect();
       setTargetRect({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
     };
