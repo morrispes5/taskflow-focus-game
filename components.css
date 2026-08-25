@@ -436,3 +436,25 @@
   .focus-controls { flex-direction: column; align-items: stretch; }
   .focus-controls .btn { width: 100%; }
 }
+
+/* The empty mission needs to invite a first action, not look like a disabled banner. */
+.mission-card-empty { position: relative; border: 1px solid #cddaff; background: #edf3ff; color: var(--color-ink); box-shadow: 0 18px 40px rgba(40, 100, 240, 0.1); }
+.mission-card-empty .mission-copy { position: relative; z-index: 1; }
+.mission-card-empty .mission-copy .eyebrow { color: var(--color-cobalt); }
+.mission-card-empty .quiet-status { color: var(--color-ink-soft); }
+.mission-card-empty .mission-copy h2 { max-width: 560px; color: var(--color-ink); font-size: clamp(1.8rem, 4vw, 3.1rem); line-height: 1.02; }
+.mission-card-empty .mission-copy > .muted { max-width: 470px; margin-top: 13px; color: var(--color-ink-soft); font-size: 0.92rem; line-height: 1.55; }
+.mission-card-empty .mission-illustration { border-left-color: #d5e1ff; background: #dfeaff; object-fit: contain; padding: 17px; }
+
+@media (max-width: 1020px) {
+  .mission-card-empty { grid-template-columns: minmax(0, 1fr) 150px; min-height: 300px; }
+  .mission-card-empty .mission-illustration { display: block; min-height: 300px; }
+}
+
+@media (max-width: 500px) {
+  .mission-card-empty { display: block; min-height: 340px; }
+  .mission-card-empty .mission-copy { min-height: 340px; padding: 24px; padding-right: 76px; }
+  .mission-card-empty .mission-copy h2 { max-width: 240px; }
+  .mission-card-empty .mission-copy > .muted { max-width: 250px; font-size: 0.84rem; }
+  .mission-card-empty .mission-illustration { position: absolute; right: 6px; bottom: 0; z-index: 0; width: 122px; height: 122px; min-height: 0; padding: 7px; border: 0; opacity: 0.92; }
+}
