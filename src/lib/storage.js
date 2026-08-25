@@ -11,6 +11,11 @@ export const STORAGE_KEYS = {
   onboarding: 'taskflow_onboarding'
 };
 
+export const DATABASE_NAME = 'taskflow_workspace';
+const DATABASE_VERSION = 1;
+const STORE_NAME = 'workspace';
+const APP_RECORD_KEY = 'app-data';
+
 export const MAX_TASK_LENGTH = 120;
 export const MAX_CATEGORY_LENGTH = 32;
 export const PRIORITIES = ['high', 'medium', 'low'];
@@ -22,20 +27,13 @@ export const MAX_PROFILE_NAME_LENGTH = 40;
 export const MAX_PROFILE_GOAL_LENGTH = 120;
 
 export const DEFAULT_PROFILE = { name: '', role: '', goal: '', tagline: 'Ruang produktif harian' };
-export const LEGACY_PROFILE_NAME = 'Vio';
 export const DEFAULT_ONBOARDING = { profileCompleted: false, tutorialCompleted: false, tutorialSkipped: false, completedAt: null };
-export const LEGACY_ONBOARDING = { profileCompleted: true, tutorialCompleted: true, tutorialSkipped: true, completedAt: null };
 const DEFAULT_PREFERENCES = { motion: 'full', focusPreset: 25 };
 
 function isDateString(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00`);
   return !Number.isNaN(date.getTime()) && `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` === value;
-}
-
-function safeParse(value, fallback) {
-  if (!value) return fallback;
-  try { return JSON.parse(value); } catch { return fallback; }
 }
 
 function numberOr(value, fallback) {
@@ -122,66 +120,117 @@ export function normalizePreferences(raw) {
   };
 }
 
-function defaultProgress() {
-  return normalizeProgress({});
-}
-
-function defaultSessions() { return []; }
-
-function defaultActiveFocus() { return null; }
-
-export function hasStoredWorkspace(storage = globalThis.localStorage) {
-  return Object.entries(STORAGE_KEYS).some(([key, storageKey]) => key !== 'onboarding' && storage.getItem(storageKey) !== null);
-}
-
-export function loadAppData(storage = globalThis.localStorage) {
-  const tasksRaw = storage.getItem(STORAGE_KEYS.tasks);
-  const parsedTasks = safeParse(tasksRaw, null);
-  const tasks = tasksRaw === null
-    ? []
-    : (Array.isArray(parsedTasks) ? parsedTasks.map(normalizeTask).filter(Boolean) : []);
-  const hasLegacyWorkspace = hasStoredWorkspace(storage);
-  const storedName = storage.getItem(STORAGE_KEYS.username);
-  const storedRole = storage.getItem(STORAGE_KEYS.role);
-  const storedGoal = storage.getItem(STORAGE_KEYS.goal);
-  const profile = {
-    name: storedName || (hasLegacyWorkspace ? LEGACY_PROFILE_NAME : DEFAULT_PROFILE.name),
-    role: storedRole || DEFAULT_PROFILE.role,
-    goal: storedGoal || DEFAULT_PROFILE.goal,
-    tagline: storage.getItem(STORAGE_KEYS.tagline) || DEFAULT_PROFILE.tagline
-  };
-  const storedOnboarding = safeParse(storage.getItem(STORAGE_KEYS.onboarding), null);
-  const onboarding = normalizeOnboarding(storedOnboarding, hasLegacyWorkspace ? LEGACY_ONBOARDING : DEFAULT_ONBOARDING);
-  const parsedSessions = safeParse(storage.getItem(STORAGE_KEYS.sessions), defaultSessions());
+export function createEmptyAppData() {
   return {
-    tasks,
-    profile,
-    onboarding,
-    progress: normalizeProgress(safeParse(storage.getItem(STORAGE_KEYS.progress), defaultProgress())),
-    sessions: Array.isArray(parsedSessions) ? parsedSessions.map(normalizeSession).filter(Boolean) : [],
-    activeFocus: safeParse(storage.getItem(STORAGE_KEYS.activeFocus), defaultActiveFocus()),
-    preferences: normalizePreferences(safeParse(storage.getItem(STORAGE_KEYS.preferences), DEFAULT_PREFERENCES))
+    tasks: [],
+    profile: { ...DEFAULT_PROFILE },
+    onboarding: { ...DEFAULT_ONBOARDING },
+    progress: normalizeProgress({}),
+    sessions: [],
+    activeFocus: null,
+    preferences: normalizePreferences({})
   };
 }
 
-export function saveAppData(data) {
-  localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(data.tasks));
-  localStorage.setItem(STORAGE_KEYS.progress, JSON.stringify(data.progress));
-  localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify(data.sessions));
-  if (data.activeFocus) localStorage.setItem(STORAGE_KEYS.activeFocus, JSON.stringify(data.activeFocus));
-  else localStorage.removeItem(STORAGE_KEYS.activeFocus);
-  localStorage.setItem(STORAGE_KEYS.preferences, JSON.stringify(data.preferences));
-  localStorage.setItem(STORAGE_KEYS.username, data.profile.name);
-  localStorage.setItem(STORAGE_KEYS.tagline, data.profile.tagline);
-  localStorage.setItem(STORAGE_KEYS.role, data.profile.role || '');
-  localStorage.setItem(STORAGE_KEYS.goal, data.profile.goal || '');
-  localStorage.setItem(STORAGE_KEYS.onboarding, JSON.stringify(data.onboarding));
-  window.dispatchEvent(new CustomEvent('taskflow:data-changed'));
+export function normalizeAppData(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  return {
+    tasks: Array.isArray(source.tasks) ? source.tasks.map(normalizeTask).filter(Boolean) : [],
+    profile: normalizeProfile(source.profile),
+    onboarding: normalizeOnboarding(source.onboarding),
+    progress: normalizeProgress(source.progress),
+    sessions: Array.isArray(source.sessions) ? source.sessions.map(normalizeSession).filter(Boolean) : [],
+    activeFocus: source.activeFocus && typeof source.activeFocus === 'object' ? source.activeFocus : null,
+    preferences: normalizePreferences(source.preferences)
+  };
 }
+
+export function storageKeyList() { return Object.values(STORAGE_KEYS); }
+
+export function clearLegacyTaskFlowData(storage = globalThis.localStorage) {
+  storageKeyList().forEach((key) => storage.removeItem(key));
+}
+
+function requestResult(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('Database browser tidak dapat dibaca.'));
+  });
+}
+
+function transactionResult(transaction) {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onabort = () => reject(transaction.error || new Error('Database browser tidak dapat disimpan.'));
+    transaction.onerror = () => reject(transaction.error || new Error('Database browser tidak dapat disimpan.'));
+  });
+}
+
+export function createWorkspaceStore({ indexedDb = globalThis.indexedDB, storage = globalThis.localStorage, databaseName = DATABASE_NAME } = {}) {
+  if (!indexedDb) throw new Error('Browser ini tidak mendukung penyimpanan data TaskFlow.');
+  let databasePromise;
+
+  const openDatabase = () => {
+    if (databasePromise) return databasePromise;
+    databasePromise = new Promise((resolve, reject) => {
+      const request = indexedDb.open(databaseName, DATABASE_VERSION);
+      request.onupgradeneeded = () => {
+        const database = request.result;
+        if (!database.objectStoreNames.contains(STORE_NAME)) database.createObjectStore(STORE_NAME);
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('Database browser tidak dapat dibuka.'));
+    });
+    return databasePromise;
+  };
+
+  const read = async () => {
+    const database = await openDatabase();
+    const transaction = database.transaction(STORE_NAME, 'readonly');
+    const value = await requestResult(transaction.objectStore(STORE_NAME).get(APP_RECORD_KEY));
+    await transactionResult(transaction);
+    return value;
+  };
+
+  const write = async (data) => {
+    const normalized = normalizeAppData(data);
+    const database = await openDatabase();
+    const transaction = database.transaction(STORE_NAME, 'readwrite');
+    transaction.objectStore(STORE_NAME).put(normalized, APP_RECORD_KEY);
+    await transactionResult(transaction);
+    return normalized;
+  };
+
+  return {
+    async load() {
+      const stored = await read();
+      if (stored) return normalizeAppData(stored);
+      // Version four deliberately starts all previously visited browsers with a blank workspace.
+      clearLegacyTaskFlowData(storage);
+      return write(createEmptyAppData());
+    },
+    save(data) { return write(data); },
+    async reset() {
+      clearLegacyTaskFlowData(storage);
+      return write(createEmptyAppData());
+    },
+    close() {
+      if (!databasePromise) return;
+      databasePromise.then((database) => database.close());
+      databasePromise = undefined;
+    }
+  };
+}
+
+const defaultStore = typeof window === 'undefined' ? null : createWorkspaceStore();
+
+export function loadAppData() { return defaultStore.load(); }
+export function saveAppData(data) { return defaultStore.save(data); }
+export function resetAppData() { return defaultStore.reset(); }
 
 export function createBackup(data) {
   return {
-    version: 3,
+    version: 4,
     exportedAt: Date.now(),
     tasks: data.tasks,
     progress: data.progress,
@@ -198,16 +247,13 @@ export function parseBackupPayload(payload) {
   if (!source || !Array.isArray(source.tasks)) throw new Error('Format JSON tidak sesuai.');
   const normalizedTasks = source.tasks.map(normalizeTask).filter(Boolean);
   if (source.tasks.length > 0 && normalizedTasks.length === 0) throw new Error('Tidak ada tugas valid di file tersebut.');
-  const legacyBackup = !source.onboarding;
-  return {
+  return normalizeAppData({
     tasks: normalizedTasks,
-    progress: normalizeProgress(source.progress),
-    sessions: Array.isArray(source.focusSessions) ? source.focusSessions.map(normalizeSession).filter(Boolean) : [],
-    activeFocus: source.activeFocus && typeof source.activeFocus === 'object' ? source.activeFocus : null,
-    profile: normalizeProfile(source.profile, legacyBackup ? { ...DEFAULT_PROFILE, name: LEGACY_PROFILE_NAME } : DEFAULT_PROFILE),
-    preferences: normalizePreferences(source.preferences),
-    onboarding: normalizeOnboarding(source.onboarding, legacyBackup ? LEGACY_ONBOARDING : DEFAULT_ONBOARDING)
-  };
+    progress: source.progress,
+    sessions: source.focusSessions,
+    activeFocus: source.activeFocus,
+    profile: source.profile,
+    preferences: source.preferences,
+    onboarding: source.onboarding
+  });
 }
-
-export function storageKeyList() { return Object.values(STORAGE_KEYS); }

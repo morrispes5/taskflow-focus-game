@@ -297,6 +297,12 @@
 .help-note strong { display: block; font-size: 0.8rem; }
 .help-note p { margin-top: 4px; color: var(--color-muted); font-size: 0.76rem; }
 
+.workspace-loading { display: grid; min-height: 100vh; place-items: center; padding-block: 36px; }
+.workspace-loading-card { display: grid; justify-items: start; gap: 12px; width: min(100%, 430px); padding: 32px; border: 1px solid var(--color-line); border-radius: 12px; background: var(--color-surface); box-shadow: 0 20px 44px rgba(23, 32, 47, 0.09); }
+.workspace-loading-card .brand-mark { width: 48px; height: 48px; }
+.workspace-loading-card h1 { font-size: 1.7rem; }
+.workspace-loading-card p:not(.eyebrow) { color: var(--color-muted); line-height: 1.55; }
+
 .first-run-shell { display: grid; min-height: calc(100vh - 170px); place-items: center; padding-block: 28px 64px; }
 .profile-gate { display: grid; grid-template-columns: minmax(230px, 0.85fr) minmax(0, 1fr); gap: clamp(28px, 5vw, 68px); width: min(100%, 960px); padding: clamp(24px, 5vw, 52px); border: 1px solid var(--color-line); border-radius: 18px; background: var(--color-surface); box-shadow: 0 24px 56px rgba(23, 32, 47, 0.1); }
 .profile-gate-copy { display: flex; flex-direction: column; align-items: flex-start; }

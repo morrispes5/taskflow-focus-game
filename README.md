@@ -13,7 +13,7 @@ Repository yang disiapkan untuk publikasi: `taskflow-focus-game`.
 - Pengaturan profil, preferensi motion, preset fokus, export JSON, import JSON tervalidasi, dan reset dengan konfirmasi.
 - First-run flow tanpa login: workspace baru dimulai kosong, profil wajib diisi, lalu tutorial interaktif dan rekomendasi task offline muncul sesuai tujuan pengguna.
 - Rekomendasi personal bersifat rules-based, dapat diedit dan dipilih sebagian sebelum masuk ke task board.
-- Data tersimpan lokal melalui `localStorage`, sehingga tidak membutuhkan login atau backend.
+- Data tersimpan lokal melalui IndexedDB browser, sehingga tidak membutuhkan login, backend, atau database eksternal.
 - Motion memakai Motion for React untuk transisi/layout dan Anime.js untuk sequence reward yang kecil dan terarah.
 - Ilustrasi state tersimpan lokal di `public/assets/illustrations/` agar aplikasi tetap dapat berjalan offline.
 
@@ -68,16 +68,8 @@ npm run build
 
 ## Penyimpanan Lokal
 
-TaskFlow mempertahankan key utama `taskflow_tasks` dan memigrasikan data tugas lama secara backward-compatible. Key tambahan yang digunakan:
+Setiap perangkat dan profil browser memiliki workspace IndexedDB sendiri. Pengunjung baru selalu memulai dengan profil, tugas, sesi fokus, dan progres kosong. Data tetap ada saat halaman ditutup atau dimuat ulang, tetapi tidak tersinkron ke perangkat lain.
 
-- `taskflow_progress`
-- `taskflow_focus_sessions`
-- `taskflow_focus_active`
-- `taskflow_preferences`
-- `taskflow_username`
-- `taskflow_tagline`
-- `taskflow_role`
-- `taskflow_goal`
-- `taskflow_onboarding`
+Versi IndexedDB ini melakukan reset satu kali terhadap key TaskFlow lama berbasis `localStorage`, termasuk demo task dari versi awal, agar semua browser memulai dari onboarding yang bersih. Pengguna perangkat bersama dapat memilih **Mulai workspace baru** dari Pengaturan untuk menghapus data lokal dan memulai lagi.
 
 Lihat [design.md](design.md) untuk keputusan produk, sistem visual, kontrak data, motion, dan batasan fitur fase pertama.

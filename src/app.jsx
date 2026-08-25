@@ -7,7 +7,7 @@ import {
   Trash2, Trophy, Upload, X, Zap
 } from 'lucide-react';
 import { playHeroSequence, playNumberSequence, playRewardSequence } from './motion/anime.js';
-import { loadAppData, saveAppData, createBackup, parseBackupPayload, normalizeProgress, DEFAULT_PROFILE, DEFAULT_ONBOARDING, PROFILE_ROLES, PROFILE_ROLE_LABELS } from './lib/storage.js';
+import { loadAppData, saveAppData, resetAppData, createBackup, parseBackupPayload, DEFAULT_PROFILE, PROFILE_ROLES, PROFILE_ROLE_LABELS } from './lib/storage.js';
 import {
   filterTasks, formatDate, getAnalytics, getDashboardStats, getDueInfo, getLevel, getNextLevelXp,
   getProfileRecommendations, getSessionXp, getTaskXp, isOverdue, makeTask, selectDailyMission, sortTasks, todayString,
@@ -67,40 +67,54 @@ function applySessionReward(progress, activeSeconds) {
 
 export default function TaskFlowApp() {
   const page = getCurrentPage();
-  const [data, setData] = useState(() => loadAppData());
+  const [data, setData] = useState(null);
   const [notice, setNotice] = useState(null);
-  const [tourOpen, setTourOpen] = useState(() => {
-    const initial = loadAppData();
-    return initial.onboarding.profileCompleted && !initial.onboarding.tutorialCompleted && !initial.onboarding.tutorialSkipped;
-  });
+  const [storageError, setStorageError] = useState(null);
+  const [tourOpen, setTourOpen] = useState(false);
   const dataRef = useRef(data);
+  const saveQueueRef = useRef(Promise.resolve());
+  const workspaceChannelRef = useRef(null);
+
+  const hydrate = useCallback(async () => {
+    try {
+      setStorageError(null);
+      const initial = await loadAppData();
+      dataRef.current = initial;
+      setData(initial);
+      setTourOpen(initial.onboarding.profileCompleted && !initial.onboarding.tutorialCompleted && !initial.onboarding.tutorialSkipped);
+    } catch (error) {
+      setStorageError(error.message || 'Data TaskFlow tidak dapat dibuka di browser ini.');
+    }
+  }, []);
+
+  useEffect(() => { hydrate(); }, [hydrate]);
 
   const commit = useCallback((updater, message = '') => {
+    if (!dataRef.current) return;
     const next = updater(dataRef.current);
     dataRef.current = next;
     setData(next);
-    saveAppData(next);
+    saveQueueRef.current = saveQueueRef.current.catch(() => undefined).then(() => saveAppData(next));
+    saveQueueRef.current.then(() => {
+      window.dispatchEvent(new CustomEvent('taskflow:data-changed'));
+      workspaceChannelRef.current?.postMessage('updated');
+    }).catch((error) => setStorageError(error.message || 'Perubahan belum dapat disimpan.'));
     if (message) setNotice({ id: Date.now(), text: message });
   }, []);
 
   useEffect(() => {
-    const refresh = () => {
-      const next = loadAppData();
-      dataRef.current = next;
-      setData(next);
-    };
-    window.addEventListener('storage', refresh);
-    window.addEventListener('taskflow:data-changed', refresh);
-    return () => {
-      window.removeEventListener('storage', refresh);
-      window.removeEventListener('taskflow:data-changed', refresh);
-    };
-  }, []);
+    if (!('BroadcastChannel' in window)) return undefined;
+    const channel = new BroadcastChannel('taskflow-workspace');
+    workspaceChannelRef.current = channel;
+    channel.onmessage = () => hydrate();
+    return () => { workspaceChannelRef.current = null; channel.close(); };
+  }, [hydrate]);
 
   useEffect(() => {
+    if (!data) return;
     document.documentElement.dataset.motion = data.preferences.motion;
     document.documentElement.dataset.page = page;
-  }, [data.preferences.motion, page]);
+  }, [data?.preferences.motion, page]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -148,6 +162,23 @@ export default function TaskFlowApp() {
     }));
   };
 
+  const resetWorkspace = async () => {
+    try {
+      const next = await resetAppData();
+      dataRef.current = next;
+      setData(next);
+      setTourOpen(false);
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      window.dispatchEvent(new CustomEvent('taskflow:data-changed'));
+      workspaceChannelRef.current?.postMessage('updated');
+    } catch (error) {
+      setStorageError(error.message || 'Workspace belum dapat direset.');
+      throw error;
+    }
+  };
+
+  if (!data) return <WorkspaceLoading error={storageError} onRetry={hydrate} />;
+
   return (
     <MotionConfig reducedMotion={data.preferences.motion === 'compact' ? 'always' : 'user'}>
       <AppShell page={page} profile={data.profile} progress={data.progress} onboarding={data.onboarding} notice={notice} tourOpen={tourOpen} onCompleteProfile={completeProfile} onCloseTutorial={closeTutorial}>
@@ -155,10 +186,14 @@ export default function TaskFlowApp() {
         {page === 'tasks' && <TasksPage data={data} commit={commit} toggleTask={toggleTask} />}
         {page === 'focus' && <FocusPage data={data} commit={commit} toggleTask={toggleTask} />}
         {page === 'analytics' && <AnalyticsPage data={data} />}
-        {page === 'settings' && <SettingsPage data={data} commit={commit} updatePreferences={updatePreferences} onStartTutorial={() => setTourOpen(true)} />}
+        {page === 'settings' && <SettingsPage data={data} commit={commit} updatePreferences={updatePreferences} onStartTutorial={() => setTourOpen(true)} onResetWorkspace={resetWorkspace} />}
       </AppShell>
     </MotionConfig>
   );
+}
+
+function WorkspaceLoading({ error, onRetry }) {
+  return <main className="workspace-loading container"><section className="workspace-loading-card" aria-live="polite"><span className="brand-mark" aria-hidden="true"><span /></span><p className="eyebrow">TaskFlow</p><h1>{error ? 'Ruang fokus belum dapat dibuka.' : 'Menyiapkan ruang fokusmu...'}</h1><p>{error || 'Memeriksa workspace lokal di perangkat ini.'}</p>{error && <button className="btn btn-primary" type="button" onClick={onRetry}>Coba lagi</button>}</section></main>;
 }
 
 function AppShell({ page, profile, progress, onboarding, notice, tourOpen, onCompleteProfile, onCloseTutorial, children }) {
@@ -481,7 +516,7 @@ function AnalyticsPage({ data }) {
 
 function MetricList({ title, kicker, items, empty }) { const max = Math.max(...items.map((item) => item.count), 1); return <article className="card metric-card"><div className="card-header"><div><p className="section-kicker">{kicker}</p><h2>{title}</h2></div></div>{items.length ? <ul className="metric-list metric-bars">{items.map((item) => <li key={item.label}><div><span>{item.label}</span><div className="metric-bar"><i style={{ width: `${Math.round((item.count / max) * 100)}%` }} /></div></div><strong>{item.count}</strong></li>)}</ul> : <p className="muted">{empty}</p>}</article>; }
 
-function SettingsPage({ data, commit, updatePreferences, onStartTutorial }) {
+function SettingsPage({ data, commit, updatePreferences, onStartTutorial, onResetWorkspace }) {
   const [profile, setProfile] = useState(data.profile);
   const [status, setStatus] = useState({ text: '', error: false });
   const [confirm, setConfirm] = useState(null);
@@ -490,7 +525,7 @@ function SettingsPage({ data, commit, updatePreferences, onStartTutorial }) {
   const saveProfile = (event) => { event.preventDefault(); const validation = validateProfileInput(profile); if (validation) { setStatus({ text: validation.message, error: true }); return; } commit((current) => ({ ...current, profile: { ...current.profile, name: profile.name.trim(), role: profile.role, goal: profile.goal.trim(), tagline: profile.tagline.trim() || DEFAULT_PROFILE.tagline }, onboarding: { ...current.onboarding, profileCompleted: true } })); setStatus({ text: 'Profil tersimpan.', error: false }); };
   const exportData = () => { const blob = new Blob([JSON.stringify(createBackup(data), null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'taskflow-backup.json'; anchor.click(); URL.revokeObjectURL(url); setStatus({ text: 'Backup berhasil dibuat.', error: false }); };
   const importData = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const parsed = parseBackupPayload(JSON.parse(await file.text())); setConfirm({ type: 'import', data: parsed, title: 'Pulihkan backup ini?', message: `Backup berisi ${parsed.tasks.length} tugas dan akan menggantikan data lokal saat ini.` }); } catch (error) { setStatus({ text: error.message || 'File JSON tidak bisa dibaca.', error: true }); } event.target.value = ''; };
-  const resetAll = () => setConfirm({ type: 'reset', title: 'Hapus semua data?', message: 'Semua tugas, profil, sesi fokus, XP, streak, dan status tutorial di perangkat ini akan dihapus.' });
-  const confirmAction = () => { if (confirm?.type === 'import') { commit(() => confirm.data); setStatus({ text: 'Data berhasil dipulihkan.', error: false }); } if (confirm?.type === 'reset') { commit((current) => ({ ...current, tasks: [], sessions: [], activeFocus: null, progress: normalizeProgress({}), profile: { ...DEFAULT_PROFILE }, onboarding: { ...DEFAULT_ONBOARDING }, preferences: current.preferences })); setStatus({ text: 'Workspace direset. Profil perlu diisi lagi.', error: false }); } setConfirm(null); };
-  return <section className="settings-layout"><div className="settings-main"><article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Profil</p><h2>Ruang kerja yang terasa milikmu</h2></div><span className="card-icon"><Sparkles size={18} /></span></div><form className="form-stack" onSubmit={saveProfile}><div className="field-group"><label htmlFor="profile-name">Nama panggilan</label><input id="profile-name" className="input" maxLength={40} value={profile.name} onChange={(event) => setProfile((current) => ({ ...current, name: event.target.value }))} /></div><div className="field-group"><label htmlFor="profile-role">Peran</label><select id="profile-role" className="input" value={profile.role} onChange={(event) => setProfile((current) => ({ ...current, role: event.target.value }))}><option value="">Pilih peran</option>{PROFILE_ROLES.map((role) => <option key={role} value={role}>{PROFILE_ROLE_LABELS[role]}</option>)}</select></div><div className="field-group"><label htmlFor="profile-goal">Tujuan utama</label><textarea id="profile-goal" className="input" maxLength={120} value={profile.goal} onChange={(event) => setProfile((current) => ({ ...current, goal: event.target.value }))} placeholder="Contoh: Menyelesaikan proyek akhir dengan lebih teratur" /></div><div className="field-group"><label htmlFor="profile-tagline">Tagline <span className="label-hint">opsional</span></label><input id="profile-tagline" className="input" maxLength={80} value={profile.tagline} onChange={(event) => setProfile((current) => ({ ...current, tagline: event.target.value }))} placeholder="Pelan-pelan tapi selesai" /></div><div className="action-row"><button className="btn btn-primary" type="submit"><Check size={16} />Simpan profil</button>{status.text && <span className={status.error ? 'form-status form-status-error' : 'form-status'} role="status">{status.text}</span>}</div></form></article><article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Fokus dan motion</p><h2>Atur rasa interaksinya</h2></div><span className="card-icon"><Zap size={18} /></span></div><div className="settings-options"><label className="setting-row"><span><strong>Motion</strong><small>Kurangi gerak jika kamu ingin layar lebih tenang.</small></span><select className="input setting-select" value={data.preferences.motion} onChange={(event) => updatePreferences({ motion: event.target.value })}><option value="full">Penuh</option><option value="compact">Ringkas</option><option value="system">Ikuti perangkat</option></select></label><label className="setting-row"><span><strong>Preset Focus Run</strong><small>Durasi awal untuk tombol mulai di Beranda.</small></span><select className="input setting-select" value={data.preferences.focusPreset} onChange={(event) => updatePreferences({ focusPreset: Number(event.target.value) })}><option value="25">25 menit</option><option value="50">50 menit</option></select></label></div></article><article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Bantuan</p><h2>Kenali TaskFlow lagi</h2></div><span className="card-icon"><CircleHelp size={18} /></span></div><p className="muted">Jalankan kembali tutorial visual tanpa mengubah data tugasmu.</p><button className="btn btn-secondary" type="button" onClick={onStartTutorial}><CircleHelp size={16} />Mulai tutorial lagi</button></article><article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Backup dan pemulihan</p><h2>Data tetap di perangkat ini</h2></div><span className="card-icon"><Download size={18} /></span></div><p className="muted">Backup menyimpan tugas, profil, XP, sesi fokus, dan preferensi dalam satu file JSON.</p><div className="action-row"><button className="btn btn-secondary" type="button" onClick={exportData}><Download size={16} />Export JSON</button><button className="btn btn-secondary" type="button" onClick={() => fileRef.current?.click()}><Upload size={16} />Import JSON</button><input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={importData} /></div></article><article className="card danger-card"><div className="card-header"><div><p className="section-kicker danger-text">Zona berbahaya</p><h2>Mulai ulang ruang kerja</h2></div><span className="card-icon card-icon-danger"><Trash2 size={18} /></span></div><p className="muted">Tindakan ini menghapus semua tugas, progres, profil, dan status tutorial lokal. Backup dulu jika datanya masih dibutuhkan.</p><button className="btn btn-danger" type="button" onClick={resetAll}><Trash2 size={16} />Hapus semua data</button></article></div><aside className="settings-aside"><div className="settings-profile"><span className="profile-orbit"><span>{(data.profile.name || 'V').slice(0, 1).toUpperCase()}</span></span><p className="eyebrow">Level {data.progress.level}</p><h2>{data.profile.name || 'Pengguna baru'}</h2><p>{data.profile.goal || data.profile.tagline}</p><div className="aside-stats"><span><strong>{data.progress.totalXp}</strong> XP</span><span><strong>{data.progress.currentStreak}</strong> hari streak</span></div></div><div className="help-note"><CircleHelp size={18} /><div><strong>Ruang yang tenang</strong><p>TaskFlow menyimpan data secara lokal dan tidak membutuhkan koneksi untuk dipakai.</p></div></div></aside><ConfirmDialog open={Boolean(confirm)} title={confirm?.title} message={confirm?.message} confirmLabel={confirm?.type === 'import' ? 'Pulihkan data' : 'Hapus semua'} danger={confirm?.type === 'reset'} onClose={() => setConfirm(null)} onConfirm={confirmAction} /></section>;
+  const resetAll = () => setConfirm({ type: 'reset', title: 'Mulai workspace baru?', message: 'Tugas, profil, sesi fokus, XP, preferensi, dan status tutorial di perangkat ini akan dihapus. Kamu akan kembali ke pengisian profil.' });
+  const confirmAction = async () => { if (confirm?.type === 'import') { commit(() => confirm.data); setStatus({ text: 'Data berhasil dipulihkan.', error: false }); } if (confirm?.type === 'reset') { try { await onResetWorkspace(); } catch { setStatus({ text: 'Workspace belum dapat direset.', error: true }); } } setConfirm(null); };
+  return <section className="settings-layout"><div className="settings-main"><article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Profil</p><h2>Ruang kerja yang terasa milikmu</h2></div><span className="card-icon"><Sparkles size={18} /></span></div><form className="form-stack" onSubmit={saveProfile}><div className="field-group"><label htmlFor="profile-name">Nama panggilan</label><input id="profile-name" className="input" maxLength={40} value={profile.name} onChange={(event) => setProfile((current) => ({ ...current, name: event.target.value }))} /></div><div className="field-group"><label htmlFor="profile-role">Peran</label><select id="profile-role" className="input" value={profile.role} onChange={(event) => setProfile((current) => ({ ...current, role: event.target.value }))}><option value="">Pilih peran</option>{PROFILE_ROLES.map((role) => <option key={role} value={role}>{PROFILE_ROLE_LABELS[role]}</option>)}</select></div><div className="field-group"><label htmlFor="profile-goal">Tujuan utama</label><textarea id="profile-goal" className="input" maxLength={120} value={profile.goal} onChange={(event) => setProfile((current) => ({ ...current, goal: event.target.value }))} placeholder="Contoh: Menyelesaikan proyek akhir dengan lebih teratur" /></div><div className="field-group"><label htmlFor="profile-tagline">Tagline <span className="label-hint">opsional</span></label><input id="profile-tagline" className="input" maxLength={80} value={profile.tagline} onChange={(event) => setProfile((current) => ({ ...current, tagline: event.target.value }))} placeholder="Pelan-pelan tapi selesai" /></div><div className="action-row"><button className="btn btn-primary" type="submit"><Check size={16} />Simpan profil</button>{status.text && <span className={status.error ? 'form-status form-status-error' : 'form-status'} role="status">{status.text}</span>}</div></form></article><article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Fokus dan motion</p><h2>Atur rasa interaksinya</h2></div><span className="card-icon"><Zap size={18} /></span></div><div className="settings-options"><label className="setting-row"><span><strong>Motion</strong><small>Kurangi gerak jika kamu ingin layar lebih tenang.</small></span><select className="input setting-select" value={data.preferences.motion} onChange={(event) => updatePreferences({ motion: event.target.value })}><option value="full">Penuh</option><option value="compact">Ringkas</option><option value="system">Ikuti perangkat</option></select></label><label className="setting-row"><span><strong>Preset Focus Run</strong><small>Durasi awal untuk tombol mulai di Beranda.</small></span><select className="input setting-select" value={data.preferences.focusPreset} onChange={(event) => updatePreferences({ focusPreset: Number(event.target.value) })}><option value="25">25 menit</option><option value="50">50 menit</option></select></label></div></article><article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Bantuan</p><h2>Kenali TaskFlow lagi</h2></div><span className="card-icon"><CircleHelp size={18} /></span></div><p className="muted">Jalankan kembali tutorial visual tanpa mengubah data tugasmu.</p><button className="btn btn-secondary" type="button" onClick={onStartTutorial}><CircleHelp size={16} />Mulai tutorial lagi</button></article><article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Backup dan pemulihan</p><h2>Data tetap di perangkat ini</h2></div><span className="card-icon"><Download size={18} /></span></div><p className="muted">Backup menyimpan tugas, profil, XP, sesi fokus, dan preferensi dalam satu file JSON.</p><div className="action-row"><button className="btn btn-secondary" type="button" onClick={exportData}><Download size={16} />Export JSON</button><button className="btn btn-secondary" type="button" onClick={() => fileRef.current?.click()}><Upload size={16} />Import JSON</button><input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={importData} /></div></article><article className="card danger-card"><div className="card-header"><div><p className="section-kicker danger-text">Perangkat bersama</p><h2>Mulai workspace baru</h2></div><span className="card-icon card-icon-danger"><Trash2 size={18} /></span></div><p className="muted">Hapus semua data lokal perangkat ini agar pengguna berikutnya dapat mengisi profil dan mengikuti tutorial dari awal.</p><button className="btn btn-danger" type="button" onClick={resetAll}><Trash2 size={16} />Mulai workspace baru</button></article></div><aside className="settings-aside"><div className="settings-profile"><span className="profile-orbit"><span>{(data.profile.name || 'V').slice(0, 1).toUpperCase()}</span></span><p className="eyebrow">Level {data.progress.level}</p><h2>{data.profile.name || 'Pengguna baru'}</h2><p>{data.profile.goal || data.profile.tagline}</p><div className="aside-stats"><span><strong>{data.progress.totalXp}</strong> XP</span><span><strong>{data.progress.currentStreak}</strong> hari streak</span></div></div><div className="help-note"><CircleHelp size={18} /><div><strong>Ruang yang tenang</strong><p>TaskFlow menyimpan data di browser perangkat ini dan tidak membutuhkan akun.</p></div></div></aside><ConfirmDialog open={Boolean(confirm)} title={confirm?.title} message={confirm?.message} confirmLabel={confirm?.type === 'import' ? 'Pulihkan data' : 'Mulai baru'} danger={confirm?.type === 'reset'} onClose={() => setConfirm(null)} onConfirm={confirmAction} /></section>;
 }
