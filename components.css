@@ -370,6 +370,7 @@
   .home-hero .page-actions { width: 100%; }
   .home-hero .page-actions .btn { flex: 1; }
   .home-hero-preview { min-height: 380px; }
+  .content-grid { grid-template-columns: 1fr; }
   .quick-add-form { grid-template-columns: 1fr; }
   .quick-add-form .btn { width: 100%; }
   .task-filter-grid { grid-template-columns: 1fr 1fr; }
