@@ -1,5 +1,5 @@
 import { addDays, differenceInCalendarDays, endOfDay, format, isWithinInterval, parseISO, startOfWeek } from 'date-fns';
-import { normalizeTask, PRIORITY_LABELS } from './storage.js';
+import { normalizeTask, PRIORITY_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES, MAX_PROFILE_GOAL_LENGTH, MAX_PROFILE_NAME_LENGTH } from './storage.js';
 
 export const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
 
@@ -132,6 +132,48 @@ export function validateTaskInput(input) {
   if (category.length > 32) return { field: 'category', message: 'Kategori maksimal 32 karakter.' };
   if (input.dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate)) return { field: 'dueDate', message: 'Tanggal deadline tidak valid.' };
   return null;
+}
+
+export function validateProfileInput(input) {
+  const name = String(input.name ?? '').trim();
+  const role = String(input.role ?? '').trim();
+  const goal = String(input.goal ?? '').trim();
+  if (!name) return { field: 'name', message: 'Nama panggilan wajib diisi.' };
+  if (name.length > MAX_PROFILE_NAME_LENGTH) return { field: 'name', message: `Nama panggilan maksimal ${MAX_PROFILE_NAME_LENGTH} karakter.` };
+  if (!PROFILE_ROLES.includes(role)) return { field: 'role', message: 'Pilih peranmu agar rekomendasi lebih relevan.' };
+  if (!goal) return { field: 'goal', message: 'Tuliskan tujuan utama yang ingin kamu capai.' };
+  if (goal.length > MAX_PROFILE_GOAL_LENGTH) return { field: 'goal', message: `Tujuan utama maksimal ${MAX_PROFILE_GOAL_LENGTH} karakter.` };
+  return null;
+}
+
+const RECOMMENDATION_RULES = [
+  { pattern: /ujian|belajar|kuliah|materi|semester/, category: 'Belajar', items: ['Tulis tiga topik yang paling penting untuk dipahami', 'Pilih satu materi untuk dipelajari lebih dulu', 'Buat rangkuman singkat dari sesi belajarmu', 'Uji pemahaman dengan lima pertanyaan'] },
+  { pattern: /proyek|project|aplikasi|website|produk|coding|kode/, category: 'Proyek', items: ['Tulis hasil akhir proyek dalam satu kalimat', 'Pecah proyek menjadi milestone pertama', 'Buat daftar langkah teknis yang paling kecil', 'Jalankan satu sesi fokus untuk milestone pertama'] },
+  { pattern: /presentasi|makalah|laporan|tulisan|proposal/, category: 'Pekerjaan', items: ['Tentukan pesan utama yang ingin disampaikan', 'Buat kerangka isi dalam tiga bagian', 'Kumpulkan bahan yang paling penting', 'Tulis draf pertama tanpa mengedit berlebihan'] },
+  { pattern: /rutinitas|kebiasaan|olahraga|kesehatan|pribadi/, category: 'Pribadi', items: ['Tentukan perubahan kecil yang ingin dimulai', 'Pilih waktu paling realistis untuk melakukannya', 'Siapkan lingkungan agar langkah pertama mudah', 'Catat hasil pertama setelah selesai'] }
+];
+
+const GENERAL_RECOMMENDATIONS = [
+  'Tulis hasil akhir yang ingin kamu capai',
+  'Pecah tujuanmu menjadi langkah pertama yang kecil',
+  'Pilih satu hal yang bisa selesai hari ini',
+  'Jalankan satu sesi fokus untuk mulai bergerak'
+];
+
+export function getProfileRecommendations(profile) {
+  const goal = String(profile?.goal ?? '').trim().toLowerCase();
+  const role = PROFILE_ROLES.includes(profile?.role) ? profile.role : '';
+  if (!goal || !role) return [];
+  const rule = RECOMMENDATION_RULES.find((candidate) => candidate.pattern.test(goal));
+  const category = rule?.category || PROFILE_ROLE_LABELS[role];
+  const items = rule?.items || GENERAL_RECOMMENDATIONS;
+  return items.slice(0, 5).map((text, index) => ({
+    id: `${category.toLowerCase().replace(/\s+/g, '-')}-${index + 1}`,
+    text,
+    category,
+    priority: 'medium',
+    estimateMinutes: 25
+  }));
 }
 
 export function makeTask(input, id = Date.now()) {

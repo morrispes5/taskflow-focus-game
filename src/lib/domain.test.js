@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  filterTasks, getLevel, getSessionXp, getTaskXp, selectDailyMission, sortTasks, updateStreak
+  filterTasks, getLevel, getProfileRecommendations, getSessionXp, getTaskXp, selectDailyMission, sortTasks, updateStreak, validateProfileInput
 } from './domain.js';
 
 const task = (overrides = {}) => ({
@@ -51,5 +51,15 @@ describe('task domain', () => {
     const base = { totalXp: 0, level: 1, currentStreak: 1, bestStreak: 1, lastActiveDate: '2026-08-24' };
     expect(updateStreak(base, '2026-08-25').currentStreak).toBe(2);
     expect(updateStreak({ ...base, lastActiveDate: '2026-08-22' }, '2026-08-25').currentStreak).toBe(1);
+  });
+
+  it('memvalidasi profil dan membuat rekomendasi offline dari tujuan', () => {
+    expect(validateProfileInput({ name: '', role: 'mahasiswa', goal: 'Belajar ujian' }).field).toBe('name');
+    expect(validateProfileInput({ name: 'Vio', role: 'mahasiswa', goal: '' }).field).toBe('goal');
+    const recommendations = getProfileRecommendations({ name: 'Vio', role: 'mahasiswa', goal: 'Persiapan ujian akhir' });
+    expect(recommendations).toHaveLength(4);
+    expect(recommendations[0].category).toBe('Belajar');
+    expect(recommendations[0].priority).toBe('medium');
+    expect(getProfileRecommendations({ role: 'mahasiswa', goal: '' })).toEqual([]);
   });
 });

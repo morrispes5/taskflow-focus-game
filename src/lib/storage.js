@@ -5,7 +5,10 @@ export const STORAGE_KEYS = {
   activeFocus: 'taskflow_focus_active',
   preferences: 'taskflow_preferences',
   username: 'taskflow_username',
-  tagline: 'taskflow_tagline'
+  tagline: 'taskflow_tagline',
+  role: 'taskflow_role',
+  goal: 'taskflow_goal',
+  onboarding: 'taskflow_onboarding'
 };
 
 export const MAX_TASK_LENGTH = 120;
@@ -13,8 +16,15 @@ export const MAX_CATEGORY_LENGTH = 32;
 export const PRIORITIES = ['high', 'medium', 'low'];
 export const ESTIMATE_OPTIONS = [15, 25, 50, 90];
 export const PRIORITY_LABELS = { high: 'Tinggi', medium: 'Sedang', low: 'Rendah' };
+export const PROFILE_ROLES = ['pelajar', 'mahasiswa', 'profesional', 'lainnya'];
+export const PROFILE_ROLE_LABELS = { pelajar: 'Pelajar', mahasiswa: 'Mahasiswa', profesional: 'Profesional', lainnya: 'Lainnya' };
+export const MAX_PROFILE_NAME_LENGTH = 40;
+export const MAX_PROFILE_GOAL_LENGTH = 120;
 
-const DEFAULT_PROFILE = { name: 'Vio', tagline: 'Ruang produktif harian' };
+export const DEFAULT_PROFILE = { name: '', role: '', goal: '', tagline: 'Ruang produktif harian' };
+export const LEGACY_PROFILE_NAME = 'Vio';
+export const DEFAULT_ONBOARDING = { profileCompleted: false, tutorialCompleted: false, tutorialSkipped: false, completedAt: null };
+export const LEGACY_ONBOARDING = { profileCompleted: true, tutorialCompleted: true, tutorialSkipped: true, completedAt: null };
 const DEFAULT_PREFERENCES = { motion: 'full', focusPreset: 25 };
 
 function isDateString(value) {
@@ -31,6 +41,26 @@ function safeParse(value, fallback) {
 function numberOr(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+export function normalizeProfile(raw, fallback = DEFAULT_PROFILE) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  return {
+    name: String(source.name ?? fallback.name ?? '').trim().slice(0, MAX_PROFILE_NAME_LENGTH),
+    role: PROFILE_ROLES.includes(source.role) ? source.role : String(fallback.role ?? ''),
+    goal: String(source.goal ?? fallback.goal ?? '').trim().slice(0, MAX_PROFILE_GOAL_LENGTH),
+    tagline: String(source.tagline ?? fallback.tagline).trim().slice(0, 80) || DEFAULT_PROFILE.tagline
+  };
+}
+
+export function normalizeOnboarding(raw, fallback = DEFAULT_ONBOARDING) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  return {
+    profileCompleted: typeof source.profileCompleted === 'boolean' ? source.profileCompleted : Boolean(fallback.profileCompleted),
+    tutorialCompleted: typeof source.tutorialCompleted === 'boolean' ? source.tutorialCompleted : Boolean(fallback.tutorialCompleted),
+    tutorialSkipped: typeof source.tutorialSkipped === 'boolean' ? source.tutorialSkipped : Boolean(fallback.tutorialSkipped),
+    completedAt: source.completedAt !== null && Number.isFinite(Number(source.completedAt)) ? Number(source.completedAt) : fallback.completedAt ?? null
+  };
 }
 
 export function normalizeTask(raw, index = 0) {
@@ -92,23 +122,6 @@ export function normalizePreferences(raw) {
   };
 }
 
-export function createDemoTasks() {
-  const now = Date.now();
-  const date = new Date();
-  const dateString = (offset) => {
-    const value = new Date(date);
-    value.setDate(value.getDate() + offset);
-    const month = String(value.getMonth() + 1).padStart(2, '0');
-    const day = String(value.getDate()).padStart(2, '0');
-    return `${value.getFullYear()}-${month}-${day}`;
-  };
-  return [
-    { id: 1, text: 'Pelajari struktur HTML dan CSS', completed: true, createdAt: now - 172800000, updatedAt: now - 86400000, completedAt: now - 86400000, dueDate: dateString(-1), priority: 'medium', category: 'Kuliah', estimateMinutes: 25 },
-    { id: 2, text: 'Hubungkan React ke halaman beranda', completed: false, createdAt: now - 3600000, updatedAt: now - 3600000, completedAt: null, dueDate: dateString(0), priority: 'high', category: 'Proyek', estimateMinutes: 50 },
-    { id: 3, text: 'Buat wireframe halaman Focus Run', completed: false, createdAt: now - 1800000, updatedAt: now - 1800000, completedAt: null, dueDate: dateString(1), priority: 'medium', category: 'Desain', estimateMinutes: 25 }
-  ];
-}
-
 function defaultProgress() {
   return normalizeProgress({});
 }
@@ -117,24 +130,37 @@ function defaultSessions() { return []; }
 
 function defaultActiveFocus() { return null; }
 
-export function loadAppData() {
-  const tasksRaw = localStorage.getItem(STORAGE_KEYS.tasks);
+export function hasStoredWorkspace(storage = globalThis.localStorage) {
+  return Object.entries(STORAGE_KEYS).some(([key, storageKey]) => key !== 'onboarding' && storage.getItem(storageKey) !== null);
+}
+
+export function loadAppData(storage = globalThis.localStorage) {
+  const tasksRaw = storage.getItem(STORAGE_KEYS.tasks);
   const parsedTasks = safeParse(tasksRaw, null);
   const tasks = tasksRaw === null
-    ? createDemoTasks()
+    ? []
     : (Array.isArray(parsedTasks) ? parsedTasks.map(normalizeTask).filter(Boolean) : []);
+  const hasLegacyWorkspace = hasStoredWorkspace(storage);
+  const storedName = storage.getItem(STORAGE_KEYS.username);
+  const storedRole = storage.getItem(STORAGE_KEYS.role);
+  const storedGoal = storage.getItem(STORAGE_KEYS.goal);
   const profile = {
-    name: localStorage.getItem(STORAGE_KEYS.username) || DEFAULT_PROFILE.name,
-    tagline: localStorage.getItem(STORAGE_KEYS.tagline) || DEFAULT_PROFILE.tagline
+    name: storedName || (hasLegacyWorkspace ? LEGACY_PROFILE_NAME : DEFAULT_PROFILE.name),
+    role: storedRole || DEFAULT_PROFILE.role,
+    goal: storedGoal || DEFAULT_PROFILE.goal,
+    tagline: storage.getItem(STORAGE_KEYS.tagline) || DEFAULT_PROFILE.tagline
   };
-  const parsedSessions = safeParse(localStorage.getItem(STORAGE_KEYS.sessions), defaultSessions());
+  const storedOnboarding = safeParse(storage.getItem(STORAGE_KEYS.onboarding), null);
+  const onboarding = normalizeOnboarding(storedOnboarding, hasLegacyWorkspace ? LEGACY_ONBOARDING : DEFAULT_ONBOARDING);
+  const parsedSessions = safeParse(storage.getItem(STORAGE_KEYS.sessions), defaultSessions());
   return {
     tasks,
     profile,
-    progress: normalizeProgress(safeParse(localStorage.getItem(STORAGE_KEYS.progress), defaultProgress())),
+    onboarding,
+    progress: normalizeProgress(safeParse(storage.getItem(STORAGE_KEYS.progress), defaultProgress())),
     sessions: Array.isArray(parsedSessions) ? parsedSessions.map(normalizeSession).filter(Boolean) : [],
-    activeFocus: safeParse(localStorage.getItem(STORAGE_KEYS.activeFocus), defaultActiveFocus()),
-    preferences: normalizePreferences(safeParse(localStorage.getItem(STORAGE_KEYS.preferences), DEFAULT_PREFERENCES))
+    activeFocus: safeParse(storage.getItem(STORAGE_KEYS.activeFocus), defaultActiveFocus()),
+    preferences: normalizePreferences(safeParse(storage.getItem(STORAGE_KEYS.preferences), DEFAULT_PREFERENCES))
   };
 }
 
@@ -147,19 +173,23 @@ export function saveAppData(data) {
   localStorage.setItem(STORAGE_KEYS.preferences, JSON.stringify(data.preferences));
   localStorage.setItem(STORAGE_KEYS.username, data.profile.name);
   localStorage.setItem(STORAGE_KEYS.tagline, data.profile.tagline);
+  localStorage.setItem(STORAGE_KEYS.role, data.profile.role || '');
+  localStorage.setItem(STORAGE_KEYS.goal, data.profile.goal || '');
+  localStorage.setItem(STORAGE_KEYS.onboarding, JSON.stringify(data.onboarding));
   window.dispatchEvent(new CustomEvent('taskflow:data-changed'));
 }
 
 export function createBackup(data) {
   return {
-    version: 2,
+    version: 3,
     exportedAt: Date.now(),
     tasks: data.tasks,
     progress: data.progress,
     focusSessions: data.sessions,
     activeFocus: data.activeFocus,
     profile: data.profile,
-    preferences: data.preferences
+    preferences: data.preferences,
+    onboarding: data.onboarding
   };
 }
 
@@ -168,16 +198,15 @@ export function parseBackupPayload(payload) {
   if (!source || !Array.isArray(source.tasks)) throw new Error('Format JSON tidak sesuai.');
   const normalizedTasks = source.tasks.map(normalizeTask).filter(Boolean);
   if (source.tasks.length > 0 && normalizedTasks.length === 0) throw new Error('Tidak ada tugas valid di file tersebut.');
+  const legacyBackup = !source.onboarding;
   return {
     tasks: normalizedTasks,
     progress: normalizeProgress(source.progress),
     sessions: Array.isArray(source.focusSessions) ? source.focusSessions.map(normalizeSession).filter(Boolean) : [],
     activeFocus: source.activeFocus && typeof source.activeFocus === 'object' ? source.activeFocus : null,
-    profile: {
-      name: String(source.profile?.name ?? DEFAULT_PROFILE.name).trim().slice(0, 40) || DEFAULT_PROFILE.name,
-      tagline: String(source.profile?.tagline ?? DEFAULT_PROFILE.tagline).trim().slice(0, 80) || DEFAULT_PROFILE.tagline
-    },
-    preferences: normalizePreferences(source.preferences)
+    profile: normalizeProfile(source.profile, legacyBackup ? { ...DEFAULT_PROFILE, name: LEGACY_PROFILE_NAME } : DEFAULT_PROFILE),
+    preferences: normalizePreferences(source.preferences),
+    onboarding: normalizeOnboarding(source.onboarding, legacyBackup ? LEGACY_ONBOARDING : DEFAULT_ONBOARDING)
   };
 }
 

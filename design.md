@@ -335,6 +335,24 @@ taskflow_focus_active = {
 } | null
 ```
 
+Workspace baru tidak membuat demo task. Profil dan status first-run disimpan terpisah, tetap lokal, dan tidak mengubah workspace lama:
+
+```js
+taskflow_username = String
+taskflow_role = 'pelajar' | 'mahasiswa' | 'profesional' | 'lainnya'
+taskflow_goal = String
+taskflow_tagline = String
+
+taskflow_onboarding = {
+  profileCompleted: Boolean,
+  tutorialCompleted: Boolean,
+  tutorialSkipped: Boolean,
+  completedAt: Number | null
+}
+```
+
+Rekomendasi dibuat secara rules-based dari role dan goal di browser. Saran dapat diedit dan dipilih sebagian sebelum dibuat menjadi tugas.
+
 Ketentuan data:
 
 - Gunakan timezone lokal browser untuk hari dan streak.

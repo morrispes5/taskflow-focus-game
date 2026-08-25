@@ -11,6 +11,8 @@ Repository yang disiapkan untuk publikasi: `taskflow-focus-game`.
 - Focus Run 25 atau 50 menit dengan jeda, lanjutkan, akhiri, reward XP, dan catatan sesi.
 - Analitik completion rate, tugas aktif, keterlambatan, fokus, penyelesaian tepat waktu, kategori, prioritas, dan perjalanan tujuh hari.
 - Pengaturan profil, preferensi motion, preset fokus, export JSON, import JSON tervalidasi, dan reset dengan konfirmasi.
+- First-run flow tanpa login: workspace baru dimulai kosong, profil wajib diisi, lalu tutorial interaktif dan rekomendasi task offline muncul sesuai tujuan pengguna.
+- Rekomendasi personal bersifat rules-based, dapat diedit dan dipilih sebagian sebelum masuk ke task board.
 - Data tersimpan lokal melalui `localStorage`, sehingga tidak membutuhkan login atau backend.
 - Motion memakai Motion for React untuk transisi/layout dan Anime.js untuk sequence reward yang kecil dan terarah.
 - Ilustrasi state tersimpan lokal di `public/assets/illustrations/` agar aplikasi tetap dapat berjalan offline.
@@ -74,5 +76,8 @@ TaskFlow mempertahankan key utama `taskflow_tasks` dan memigrasikan data tugas l
 - `taskflow_preferences`
 - `taskflow_username`
 - `taskflow_tagline`
+- `taskflow_role`
+- `taskflow_goal`
+- `taskflow_onboarding`
 
 Lihat [design.md](design.md) untuk keputusan produk, sistem visual, kontrak data, motion, dan batasan fitur fase pertama.
