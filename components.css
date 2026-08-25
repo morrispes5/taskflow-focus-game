@@ -205,7 +205,7 @@
 .dialog-footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 5px; }
 .dialog-message { color: var(--color-muted); font-size: 0.88rem; }
 
-.focus-page { min-height: calc(100vh - 76px); margin-inline: max(0px, calc((var(--container) - 100vw) / 2)); padding: 0 max(0px, calc((100vw - var(--container)) / 2)); background: var(--color-ink); color: #fff; }
+.focus-page { width: 100%; min-height: calc(100vh - 76px); margin-inline: 0; padding: 0; background: var(--color-ink); color: #fff; }
 .app-frame-focus { background: var(--color-ink); }
 .app-frame-focus .app-header { background: rgba(23, 32, 47, 0.94); border-color: rgba(255, 255, 255, 0.11); }
 .app-frame-focus .brand, .app-frame-focus .nav-link { color: #fff; }
