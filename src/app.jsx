@@ -68,13 +68,15 @@ function applySessionReward(progress, activeSeconds) {
 export default function TaskFlowApp() {
   const page = getCurrentPage();
   const [data, setData] = useState(() => loadAppData());
+  const [notice, setNotice] = useState(null);
   const dataRef = useRef(data);
 
-  const commit = useCallback((updater) => {
+  const commit = useCallback((updater, message = '') => {
     const next = updater(dataRef.current);
     dataRef.current = next;
     setData(next);
     saveAppData(next);
+    if (message) setNotice({ id: Date.now(), text: message });
   }, []);
 
   useEffect(() => {
@@ -96,24 +98,32 @@ export default function TaskFlowApp() {
     document.documentElement.dataset.page = page;
   }, [data.preferences.motion, page]);
 
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timeout = window.setTimeout(() => setNotice(null), 3600);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const toggleTask = useCallback((taskId) => {
+    const target = dataRef.current.tasks.find((task) => task.id === taskId);
+    const message = target ? (target.completed ? 'Tugas dibuka kembali.' : `Tugas selesai. +${getTaskXp(target)} XP.`) : '';
     commit((current) => {
-      const target = current.tasks.find((task) => task.id === taskId);
-      if (!target) return current;
-      const completed = !target.completed;
+      const currentTarget = current.tasks.find((task) => task.id === taskId);
+      if (!currentTarget) return current;
+      const completed = !currentTarget.completed;
       const now = Date.now();
       const tasks = current.tasks.map((task) => task.id === taskId ? { ...task, completed, completedAt: completed ? now : null, updatedAt: now } : task);
       let progress = current.progress;
-      if (completed) progress = applyTaskCompletionReward(progress, target);
+      if (completed) progress = applyTaskCompletionReward(progress, currentTarget);
       return { ...current, tasks, progress };
-    });
+    }, message);
   }, [commit]);
 
   const updatePreferences = (preferences) => commit((current) => ({ ...current, preferences: { ...current.preferences, ...preferences } }));
 
   return (
     <MotionConfig reducedMotion={data.preferences.motion === 'compact' ? 'always' : 'user'}>
-      <AppShell page={page} profile={data.profile} progress={data.progress}>
+      <AppShell page={page} profile={data.profile} progress={data.progress} notice={notice}>
         {page === 'home' && <HomePage data={data} commit={commit} toggleTask={toggleTask} />}
         {page === 'tasks' && <TasksPage data={data} commit={commit} toggleTask={toggleTask} />}
         {page === 'focus' && <FocusPage data={data} commit={commit} toggleTask={toggleTask} />}
@@ -124,7 +134,7 @@ export default function TaskFlowApp() {
   );
 }
 
-function AppShell({ page, profile, progress, children }) {
+function AppShell({ page, profile, progress, notice, children }) {
   const meta = PAGE_META[page] || PAGE_META.home;
   const [menuOpen, setMenuOpen] = useState(false);
   return (
@@ -161,6 +171,7 @@ function AppShell({ page, profile, progress, children }) {
         )}
         {children}
       </main>
+      <AnimatePresence>{notice && <motion.div className="toast" role="status" aria-live="polite" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: 0.2 }}><Check size={15} />{notice.text}</motion.div>}</AnimatePresence>
     </div>
   );
 }
@@ -246,7 +257,7 @@ function HomePage({ data, commit, toggleTask }) {
   const mission = selectDailyMission(data.tasks);
   const focusTasks = sortTasks(data.tasks.filter((task) => !task.completed), 'dueSoon').slice(0, 5);
   const levelProgress = data.progress.totalXp % 100;
-  const saveTask = (input, id) => commit((current) => id ? ({ ...current, tasks: current.tasks.map((task) => task.id === id ? { ...task, ...input, category: input.category.trim() || null, dueDate: input.dueDate || null, updatedAt: Date.now() } : task) }) : ({ ...current, tasks: [makeTask(input), ...current.tasks] }));
+  const saveTask = (input, id) => commit((current) => id ? ({ ...current, tasks: current.tasks.map((task) => task.id === id ? { ...task, ...input, category: input.category.trim() || null, dueDate: input.dueDate || null, updatedAt: Date.now() } : task) }) : ({ ...current, tasks: [makeTask(input), ...current.tasks] }), id ? 'Tugas diperbarui.' : 'Tugas ditambahkan.');
   useEffect(() => {
     const animation = playHeroSequence(heroRef.current, reduced);
     return () => animation?.pause?.();
@@ -263,7 +274,7 @@ function HomePage({ data, commit, toggleTask }) {
         </PageActions>
         <div className="home-loop" data-hero-item aria-label="Alur TaskFlow"><span><strong>01</strong>Pilih misi</span><span><strong>02</strong>Jalankan fokus</span><span><strong>03</strong>Baca progres</span></div>
       </div>
-      <motion.div className="home-hero-preview" data-hero-item initial={{ opacity: 0, x: 18 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
+      <motion.div className="home-hero-preview" data-hero-item initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
         <div className="preview-topline"><span className="eyebrow">Focus Run</span><span className="quiet-status"><span className="status-dot" />Siap dimulai</span></div>
         <p className="preview-label">Misi yang sedang kamu pilih</p>
         <h2>{mission ? mission.text : 'Ruang fokusmu siap diisi.'}</h2>
@@ -295,17 +306,28 @@ function TasksPage({ data, commit, toggleTask }) {
   const [confirmTask, setConfirmTask] = useState(null);
   const [quickText, setQuickText] = useState('');
   const [quickError, setQuickError] = useState('');
+  const quickInputRef = useRef(null);
+  useEffect(() => {
+    const focusQuickAdd = (event) => {
+      const tagName = event.target?.tagName;
+      if (event.key.toLowerCase() !== 'n' || ['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName)) return;
+      event.preventDefault();
+      quickInputRef.current?.focus();
+    };
+    window.addEventListener('keydown', focusQuickAdd);
+    return () => window.removeEventListener('keydown', focusQuickAdd);
+  }, []);
   const categories = [...new Set(data.tasks.map((task) => task.category || 'Tanpa kategori'))].sort((a, b) => a.localeCompare(b, 'id'));
   const visibleTasks = sortTasks(filterTasks(data.tasks, { status, priority, category, search }), sort);
-  const saveTask = (input, id) => commit((current) => id ? ({ ...current, tasks: current.tasks.map((task) => task.id === id ? { ...task, text: input.text.trim(), dueDate: input.dueDate || null, priority: input.priority, category: input.category.trim() || null, updatedAt: Date.now() } : task) }) : ({ ...current, tasks: [makeTask(input), ...current.tasks] }));
+  const saveTask = (input, id) => commit((current) => id ? ({ ...current, tasks: current.tasks.map((task) => task.id === id ? { ...task, text: input.text.trim(), dueDate: input.dueDate || null, priority: input.priority, category: input.category.trim() || null, updatedAt: Date.now() } : task) }) : ({ ...current, tasks: [makeTask(input), ...current.tasks] }), id ? 'Tugas diperbarui.' : 'Tugas ditambahkan.');
   const addQuick = (event) => { event.preventDefault(); const validation = validateTaskInput({ text: quickText }); if (validation) { setQuickError(validation.message); return; } saveTask({ text: quickText, priority: 'medium', category: '', dueDate: '' }); setQuickText(''); setQuickError(''); };
   return <>
-    <section className="task-capture card"><div className="capture-title"><div><p className="section-kicker">Tangkap cepat</p><h2>Apa yang ingin kamu selesaikan?</h2></div><span className="shortcut-hint">Enter untuk tambah cepat</span></div><form className="quick-add-form" onSubmit={addQuick}><label className="sr-only" htmlFor="quick-task">Judul tugas baru</label><input id="quick-task" className="input input-large" value={quickText} onChange={(event) => { setQuickText(event.target.value); setQuickError(''); }} placeholder="Contoh: Selesaikan outline presentasi" maxLength={120} aria-invalid={Boolean(quickError)} /><button className="btn btn-primary" type="submit"><Zap size={16} />Tambah cepat</button><button className="btn btn-secondary" type="button" onClick={() => setDialogTask({})}><MoreHorizontal size={17} />Tambah detail</button></form>{quickError && <p className="form-error" role="alert">{quickError}</p>}</section>
+    <section className="task-capture card"><div className="capture-title"><div><p className="section-kicker">Tangkap cepat</p><h2>Apa yang ingin kamu selesaikan?</h2></div><span className="shortcut-hint">Tekan N untuk mulai, Enter untuk tambah</span></div><form className="quick-add-form" onSubmit={addQuick}><label className="sr-only" htmlFor="quick-task">Judul tugas baru</label><input ref={quickInputRef} id="quick-task" className="input input-large" value={quickText} onChange={(event) => { setQuickText(event.target.value); setQuickError(''); }} placeholder="Contoh: Selesaikan outline presentasi" maxLength={120} aria-invalid={Boolean(quickError)} /><button className="btn btn-primary" type="submit"><Zap size={16} />Tambah cepat</button><button className="btn btn-secondary" type="button" onClick={() => setDialogTask({})}><MoreHorizontal size={17} />Tambah detail</button></form>{quickError && <p className="form-error" role="alert">{quickError}</p>}</section>
     <section className="toolbar-section"><div className="filter-tabs" role="group" aria-label="Filter status tugas">{[['all', 'Semua'], ['active', 'Aktif'], ['completed', 'Selesai']].map(([key, label]) => <button key={key} className={`chip ${status === key ? 'active' : ''}`} type="button" onClick={() => setStatus(key)}>{label}<span>{key === 'all' ? data.tasks.length : key === 'active' ? data.tasks.filter((task) => !task.completed).length : data.tasks.filter((task) => task.completed).length}</span></button>)}</div><span className="counter-badge"><strong>{data.tasks.filter((task) => !task.completed).length}</strong> aktif</span></section>
     <section className="task-filter-grid"><label className="search-field"><Search size={17} aria-hidden="true" /><span className="sr-only">Cari tugas</span><input className="input" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari tugas atau kategori..." /></label><label><span className="sr-only">Filter prioritas</span><select className="input" value={priority} onChange={(event) => setPriority(event.target.value)}><option value="all">Semua prioritas</option><option value="high">Prioritas tinggi</option><option value="medium">Prioritas sedang</option><option value="low">Prioritas rendah</option></select></label><label><span className="sr-only">Filter kategori</span><select className="input" value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">Semua kategori</option>{categories.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label><span className="sr-only">Urutkan tugas</span><select className="input" value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">Terbaru</option><option value="dueSoon">Deadline terdekat</option><option value="priority">Prioritas tertinggi</option></select></label></section>
     <section className="task-results card"><div className="list-summary" role="status" aria-live="polite">Menampilkan {visibleTasks.length} dari {data.tasks.length} tugas</div>{visibleTasks.length ? <ul className="task-list task-list-room"><AnimatePresence mode="popLayout">{visibleTasks.map((task) => <TaskRow key={task.id} task={task} onToggle={toggleTask} onEdit={setDialogTask} onDelete={setConfirmTask} />)}</AnimatePresence></ul> : <EmptyState type={data.tasks.length ? 'empty-task' : 'empty-task'} title={!data.tasks.length ? 'Belum ada tugas' : search || priority !== 'all' || category !== 'all' ? 'Tidak ada hasil' : status === 'active' ? 'Tidak ada tugas aktif' : 'Tidak ada tugas selesai'} message={!data.tasks.length ? 'Tulis misi pertamamu di bagian atas untuk mulai membangun momentum.' : 'Coba ubah kata kunci atau filter agar daftar lain terlihat.'} action="Tambah tugas" onAction={() => setDialogTask({})} />}</section>
     <TaskDialog open={dialogTask !== null} task={dialogTask?.id ? dialogTask : null} onClose={() => setDialogTask(null)} onSave={saveTask} />
-    <ConfirmDialog open={Boolean(confirmTask)} title="Hapus tugas ini?" message="Tugas yang dihapus tidak bisa dipulihkan dari TaskFlow." confirmLabel="Hapus tugas" danger onClose={() => setConfirmTask(null)} onConfirm={() => commit((current) => ({ ...current, tasks: current.tasks.filter((task) => task.id !== confirmTask?.id) }))} />
+    <ConfirmDialog open={Boolean(confirmTask)} title="Hapus tugas ini?" message="Tugas yang dihapus tidak bisa dipulihkan dari TaskFlow." confirmLabel="Hapus tugas" danger onClose={() => setConfirmTask(null)} onConfirm={() => commit((current) => ({ ...current, tasks: current.tasks.filter((task) => task.id !== confirmTask?.id) }), 'Tugas dihapus.')} />
   </>;
 }
 
@@ -339,7 +361,7 @@ function FocusPage({ data, commit, toggleTask }) {
   const startFocus = (minutes = data.preferences.focusPreset) => { if (!task) return; const start = Date.now(); commit((current) => ({ ...current, activeFocus: { taskId: task.id, plannedMinutes: minutes, breakMinutes: minutes >= 50 ? 10 : 5, status: 'focusing', activeSeconds: 0, runningSince: start, sessionStartedAt: start, breakEndsAt: null } })); };
   const pauseFocus = () => commit((current) => { const focus = current.activeFocus; if (!focus) return current; const elapsed = focus.activeSeconds + Math.floor((Date.now() - focus.runningSince) / 1000); return { ...current, activeFocus: { ...focus, status: 'paused', activeSeconds: elapsed, runningSince: null } }; });
   const resumeFocus = () => commit((current) => ({ ...current, activeFocus: { ...current.activeFocus, status: 'focusing', runningSince: Date.now() } }));
-  const finishFocus = () => { const ended = Date.now(); commit((current) => { const focus = current.activeFocus; if (!focus) return current; const activeSeconds = focus.activeSeconds + (focus.runningSince ? Math.floor((ended - focus.runningSince) / 1000) : 0); const session = { id: ended, taskId: focus.taskId, plannedMinutes: focus.plannedMinutes, activeSeconds, status: 'completed', startedAt: focus.sessionStartedAt, endedAt: ended, rewardApplied: true }; const progress = applySessionReward(current.progress, activeSeconds); return { ...current, progress, sessions: [...current.sessions, session], activeFocus: { ...focus, status: 'break', activeSeconds, runningSince: null, breakEndsAt: ended + focus.breakMinutes * 60000 } }; }); requestAnimationFrame(() => { playRewardSequence(rewardRef.current, reduced); playNumberSequence(rewardRef.current, reduced); }); };
+  const finishFocus = () => { const ended = Date.now(); commit((current) => { const focus = current.activeFocus; if (!focus) return current; const activeSeconds = focus.activeSeconds + (focus.runningSince ? Math.floor((ended - focus.runningSince) / 1000) : 0); const session = { id: ended, taskId: focus.taskId, plannedMinutes: focus.plannedMinutes, activeSeconds, status: 'completed', startedAt: focus.sessionStartedAt, endedAt: ended, rewardApplied: true }; const progress = applySessionReward(current.progress, activeSeconds); return { ...current, progress, sessions: [...current.sessions, session], activeFocus: { ...focus, status: 'break', activeSeconds, runningSince: null, breakEndsAt: ended + focus.breakMinutes * 60000 } }; }, 'Sesi selesai. Reward XP masuk.'); requestAnimationFrame(() => { playRewardSequence(rewardRef.current, reduced); playNumberSequence(rewardRef.current, reduced); }); };
   const abandonFocus = () => commit((current) => { const focus = current.activeFocus; if (!focus) return current; const ended = Date.now(); const activeSeconds = focus.activeSeconds + (focus.runningSince ? Math.floor((ended - focus.runningSince) / 1000) : 0); return { ...current, sessions: [...current.sessions, { id: ended, taskId: focus.taskId, plannedMinutes: focus.plannedMinutes, activeSeconds, status: 'abandoned', startedAt: focus.sessionStartedAt, endedAt: ended, rewardApplied: false }], activeFocus: null }; });
   const clearBreak = () => commit((current) => ({ ...current, activeFocus: null }));
   const completion = plannedSeconds ? Math.min(100, Math.round((liveSeconds / plannedSeconds) * 100)) : 0;
