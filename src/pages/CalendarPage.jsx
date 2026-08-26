@@ -25,7 +25,7 @@ export function CalendarPage({ data }) {
       <div className="calendar-month">
         {days.map((day) => {
           const marks = getCalendarMarks(data.tasks, data.courses, day.key);
-          const hasMarks = marks.deadlineCount || marks.classCount;
+          const hasMarks = Boolean(marks.deadlineCount || marks.classCount);
           return <button key={day.key} type="button" className={`calendar-day ${day.inMonth ? '' : 'is-outside'} ${day.isToday ? 'is-today' : ''} ${selected === day.key ? 'is-selected' : ''}`} onClick={() => setSelected(day.key)}>
             <span>{day.date.getDate()}</span>
             {hasMarks && <i className="calendar-marks">{marks.examCount ? <b className="mark-exam" /> : marks.deadlineCount ? <b className="mark-task" /> : null}{marks.classCount ? <b className="mark-class" /> : null}</i>}

@@ -2,8 +2,15 @@
   --color-ink: #17202f;
   --color-ink-soft: #3d4858;
   --color-muted: #697386;
+  --color-ink-panel: #17202f;
+  --color-ink-panel-hover: #273345;
+  --color-on-ink: #ffffff;
+  --color-on-ink-muted: #aab6c5;
+  --color-on-ink-soft: #c2cbd7;
+  --color-on-ink-link: #a9c2ff;
   --color-paper: #f7f8f5;
   --color-surface: #ffffff;
+  --color-surface-hover: #ffffff;
   --color-surface-muted: #eef2ef;
   --color-line: #dfe6e1;
   --color-line-strong: #c7d2ca;
@@ -18,6 +25,10 @@
   --color-coral: #d95454;
   --color-coral-soft: #ffeded;
   --color-focus: #0f8fbd;
+  --color-empty-mission: #edf3ff;
+  --color-empty-mission-border: #cddaff;
+  --color-empty-mission-illustration: #dfeaff;
+  --color-empty-mission-illustration-border: #d5e1ff;
   --shadow-sm: 0 1px 2px rgba(23, 32, 47, 0.05), 0 5px 16px rgba(23, 32, 47, 0.035);
   --shadow-md: 0 22px 58px rgba(23, 32, 47, 0.16);
   --font-main: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -34,7 +45,7 @@
 * { box-sizing: border-box; }
 html { min-height: 100%; background: var(--color-paper); }
 body { min-width: 320px; min-height: 100%; margin: 0; background: var(--color-paper); color: var(--color-ink); font-family: var(--font-main); line-height: 1.5; }
-body::selection { background: var(--color-cobalt); color: #fff; }
+::selection { background: var(--color-cobalt); color: #fff; }
 img, svg { display: block; max-width: 100%; }
 a { color: inherit; text-decoration: none; }
 button, input, select, textarea { font: inherit; }
@@ -63,8 +74,15 @@ html[data-theme="dark"] {
   --color-ink: #e8edf4;
   --color-ink-soft: #c5ced9;
   --color-muted: #93a0b0;
+  --color-ink-panel: #0e151d;
+  --color-ink-panel-hover: #172331;
+  --color-on-ink: #f7f9fc;
+  --color-on-ink-muted: #aab6c5;
+  --color-on-ink-soft: #c2cbd7;
+  --color-on-ink-link: #a9c2ff;
   --color-paper: #121820;
   --color-surface: #1a222c;
+  --color-surface-hover: #232d39;
   --color-surface-muted: #232d39;
   --color-line: #2d3a48;
   --color-line-strong: #3d4d5e;
@@ -72,6 +90,10 @@ html[data-theme="dark"] {
   --color-mint-soft: #14352d;
   --color-amber-soft: #3a2e14;
   --color-coral-soft: #3a1e1e;
+  --color-empty-mission: #1a2942;
+  --color-empty-mission-border: #2c4671;
+  --color-empty-mission-illustration: #233a5d;
+  --color-empty-mission-illustration-border: #36557f;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28), 0 5px 16px rgba(0, 0, 0, 0.18);
   --shadow-md: 0 22px 58px rgba(0, 0, 0, 0.42);
 }

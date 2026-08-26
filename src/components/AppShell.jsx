@@ -18,7 +18,7 @@ export function AppShell({ page, profile, progress, onboarding, notice, tourOpen
           </a>
           <div className="nav-links">
             {NAV_ITEMS.map(({ href, page: itemPage, label, Icon }) => (
-              <a key={itemPage} data-tour={itemPage} className={`nav-link ${page === itemPage ? 'active' : ''}`} href={href} aria-current={page === itemPage ? 'page' : undefined} onClick={() => setMenuOpen(false)}>
+              <a key={itemPage} data-tour={itemPage} className={`nav-link ${page === itemPage ? 'active' : ''}`} href={href} aria-label={label} title={label} aria-current={page === itemPage ? 'page' : undefined} onClick={() => setMenuOpen(false)}>
                 <Icon size={16} strokeWidth={2.2} aria-hidden="true" /><span>{label}</span>
               </a>
             ))}
