@@ -125,7 +125,15 @@ export function FocusPage({ data, commit, toggleTask }) {
     return { ...current, sessions, activeFocus: null };
   }, 'Recap sesi disimpan.');
   const toggleSubtask = (subtaskId) => commit((current) => ({ ...current, tasks: current.tasks.map((item) => item.id !== task.id ? item : { ...item, subtasks: item.subtasks.map((subtask) => subtask.id === subtaskId ? { ...subtask, completed: !subtask.completed } : subtask), updatedAt: Date.now() }) }));
-  const setSoundscape = (focusSoundscape) => commit((current) => ({ ...current, preferences: { ...current.preferences, focusSoundscape } }));
+  const setSoundscape = (focusSoundscape) => {
+    commit((current) => ({ ...current, preferences: { ...current.preferences, focusSoundscape } }));
+    if (!isFocusing) return;
+    if (focusSoundscape === 'none' || !data.preferences.sound || data.preferences.focusSoundVolume <= 0) {
+      stopFocusSoundscape();
+      return;
+    }
+    startFocusSoundscape(focusSoundscape, data.preferences.focusSoundVolume);
+  };
 
   return <div className="focus-page">
     <div className="focus-topbar"><a className="focus-back" href="index.html"><ArrowLeft size={17} />Kembali ke Beranda</a><span className="focus-brand"><span className="brand-mark brand-mark-small" aria-hidden="true"><span /></span>TaskFlow Focus Run</span><span className="focus-date">{formatFocusDate(new Date())}</span></div>
