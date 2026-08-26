@@ -99,7 +99,7 @@ describe('storage migration', () => {
     expect(() => parseBackupPayload({ version: 2 })).toThrow('Format JSON tidak sesuai.');
   });
 
-  it('memigrasikan tugas v4 ke schema 5 tanpa menghapus data', async () => {
+  it('memigrasikan workspace v5 ke schema 6 tanpa menghapus data', async () => {
     const { store } = createStore();
     const initial = await store.load();
     await store.save({
@@ -109,7 +109,7 @@ describe('storage migration', () => {
       tasks: [{ id: 4, text: 'Tugas lama', completed: false, createdAt: 10, updatedAt: 10, priority: 'high', category: 'Kuliah', estimateMinutes: 50 }]
     });
     const migrated = await store.load();
-    expect(migrated.schemaVersion).toBe(5);
+    expect(migrated.schemaVersion).toBe(6);
     expect(migrated.tasks).toHaveLength(1);
     expect(migrated.tasks[0].text).toBe('Tugas lama');
     expect(migrated.tasks[0].type).toBe('pribadi');
@@ -117,20 +117,25 @@ describe('storage migration', () => {
     expect(migrated.tasks[0].recurrence).toBe('none');
     expect(migrated.courses).toEqual([]);
     expect(migrated.preferences.theme).toBe('system');
+    expect(migrated.preferences.focusSoundscape).toBe('none');
+    expect(migrated.preferences.focusSoundVolume).toBe(55);
   });
 
-  it('menyimpan mata kuliah dan backup v5', async () => {
+  it('menyimpan folder materi dan backup v6', async () => {
     const { store } = createStore();
     const initial = await store.load();
     const saved = await store.save({
       ...initial,
-      courses: [{ id: 1, name: 'PBO', code: 'IF201', color: '#2864f0', schedule: [{ day: 1, start: '08:00', end: '10:00', room: 'A1' }] }],
+      courses: [{ id: 1, name: 'PBO', code: 'IF201', color: '#2864f0', driveUrl: 'https://drive.google.com/pbo', schedule: [{ day: 1, start: '08:00', end: '10:00', room: 'A1' }] }],
       tasks: [{ id: 2, text: 'PR PBO', courseId: 1, type: 'tugas', dueDate: '2026-09-01', dueTime: '23:59' }]
     });
     expect(saved.courses[0].name).toBe('PBO');
+    expect(saved.courses[0].driveUrl).toBe('https://drive.google.com/pbo');
     expect(saved.tasks[0].courseId).toBe(1);
-    const backup = parseBackupPayload({ version: 5, tasks: saved.tasks, courses: saved.courses });
+    const backup = parseBackupPayload({ version: 6, tasks: saved.tasks, courses: saved.courses, preferences: { focusSoundscape: 'rain', focusSoundVolume: 120 } });
     expect(backup.courses).toHaveLength(1);
     expect(backup.tasks[0].dueTime).toBe('23:59');
+    expect(backup.preferences.focusSoundscape).toBe('rain');
+    expect(backup.preferences.focusSoundVolume).toBe(100);
   });
 });

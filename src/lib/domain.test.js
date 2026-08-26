@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyTaskToggle, filterTasks, getAgendaForDay, getCalendarDays, getCountdownLabel, getLevel,
   getProfileRecommendations, getSessionXp, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
-  selectDailyMission, sortTasks, spawnNextOccurrence, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput
+  getSemesterWeek, selectDailyMission, sortTasks, spawnNextOccurrence, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput
 } from './domain.js';
 import { createEmptyAppData } from './storage.js';
 
@@ -94,6 +94,16 @@ describe('task domain', () => {
     expect(validateCourseInput({ name: 'PBO' }, [makeCourse({ name: 'PBO' }, 1)])?.field).toBe('name');
     expect(validateTaskInput({ text: 'OK', url: 'drive.google.com' })?.field).toBe('url');
     expect(validateTaskInput({ text: 'OK', dueTime: '25:00' })?.field).toBe('dueTime');
+    expect(validateCourseInput({ name: 'PBO', driveUrl: 'drive.google.com/pbo' })?.field).toBe('driveUrl');
+    expect(validateCourseInput({ name: 'PBO', driveUrl: 'https://drive.google.com/pbo' })).toBeNull();
+  });
+
+  it('menghitung minggu semester dari tanggal mulai tanpa menyimpannya pada tugas', () => {
+    const semester = { startDate: '2026-08-24', endDate: '2026-12-20' };
+    expect(getSemesterWeek('2026-08-24', semester)).toBe(1);
+    expect(getSemesterWeek('2026-08-30', semester)).toBe(1);
+    expect(getSemesterWeek('2026-08-31', semester)).toBe(2);
+    expect(getSemesterWeek('2026-08-23', semester)).toBeNull();
   });
 
   it('membuat salinan tugas berulang ke tanggal berikutnya', () => {

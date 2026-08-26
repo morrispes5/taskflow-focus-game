@@ -1,7 +1,7 @@
 import { addDays, differenceInCalendarDays, endOfDay, format, isWithinInterval, parseISO, startOfMonth, startOfWeek } from 'date-fns';
 import {
   normalizeTask, PRIORITY_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES, MAX_PROFILE_GOAL_LENGTH, MAX_PROFILE_NAME_LENGTH,
-  MAX_COURSE_NAME, MAX_COURSES, MAX_NOTES_LENGTH, MAX_SUBTASKS, MAX_TASK_LENGTH, TASK_TYPES, TASK_TYPE_LABELS, COURSE_COLORS,
+  MAX_COURSE_NAME, MAX_COURSES, MAX_NOTES_LENGTH, MAX_SUBTASKS, MAX_TASK_LENGTH, MAX_URL_LENGTH, TASK_TYPES, TASK_TYPE_LABELS, COURSE_COLORS,
   isTimeString
 } from './storage.js';
 
@@ -55,6 +55,15 @@ export function getCountdownLabel(task, reference = new Date()) {
   if (hours < 24) return `${hours} jam lagi`;
   const days = Math.ceil(hours / 24);
   return `${days} hari lagi`;
+}
+
+export function getSemesterWeek(dateKey, semester) {
+  if (!dateKey || !semester?.startDate) return null;
+  const date = parseDateString(dateKey);
+  const start = parseDateString(semester.startDate);
+  if (Number.isNaN(date.getTime()) || Number.isNaN(start.getTime())) return null;
+  const difference = differenceInCalendarDays(date, start);
+  return difference < 0 ? null : Math.floor(difference / 7) + 1;
 }
 
 export function getTaskXp(task) {
@@ -337,6 +346,9 @@ export function validateCourseInput(input, existing = []) {
   const name = String(input.name ?? '').trim();
   if (!name) return { field: 'name', message: 'Nama mata kuliah wajib diisi.' };
   if (name.length > MAX_COURSE_NAME) return { field: 'name', message: `Nama maksimal ${MAX_COURSE_NAME} karakter.` };
+  const driveUrl = String(input.driveUrl ?? '').trim();
+  if (driveUrl.length > MAX_URL_LENGTH) return { field: 'driveUrl', message: `Tautan folder maksimal ${MAX_URL_LENGTH} karakter.` };
+  if (driveUrl && !/^https?:\/\//i.test(driveUrl)) return { field: 'driveUrl', message: 'Tautan folder harus diawali http:// atau https://.' };
   if (existing.length >= MAX_COURSES && !input.id) return { field: 'name', message: `Mata kuliah maksimal ${MAX_COURSES}.` };
   if (existing.some((course) => course.id !== input.id && course.name.toLowerCase() === name.toLowerCase())) return { field: 'name', message: 'Nama mata kuliah sudah ada.' };
   return null;
@@ -422,7 +434,8 @@ export function makeCourse(input, id = Date.now()) {
     color: COURSE_COLORS.includes(input.color) ? input.color : COURSE_COLORS[0],
     lecturer: String(input.lecturer ?? '').trim(),
     sks: Number(input.sks) || null,
-    schedule: Array.isArray(input.schedule) ? input.schedule : []
+    schedule: Array.isArray(input.schedule) ? input.schedule : [],
+    driveUrl: String(input.driveUrl ?? '').trim() || null
   };
 }
 

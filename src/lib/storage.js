@@ -16,8 +16,8 @@ const DATABASE_VERSION = 1;
 const STORE_NAME = 'workspace';
 const APP_RECORD_KEY = 'app-data';
 
-export const SCHEMA_VERSION = 5;
-export const BACKUP_VERSION = 5;
+export const SCHEMA_VERSION = 6;
+export const BACKUP_VERSION = 6;
 
 export const MAX_TASK_LENGTH = 120;
 export const MAX_CATEGORY_LENGTH = 32;
@@ -43,10 +43,12 @@ export const COURSE_COLORS = ['#2864f0', '#18b892', '#c98218', '#d95454', '#0f8f
 export const WEEKDAY_LABELS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 export const REMINDER_OFFSETS = [0, 1, 3, 24, 48];
 export const THEME_OPTIONS = ['light', 'dark', 'system'];
+export const FOCUS_SOUNDSCAPES = ['none', 'lofi', 'rain', 'noise'];
+export const FOCUS_SOUNDSCAPE_LABELS = { none: 'Hening', lofi: 'Lo-fi', rain: 'Hujan', noise: 'White noise' };
 
 export const DEFAULT_PROFILE = { name: '', role: '', goal: '', tagline: 'Ruang produktif harian' };
 export const DEFAULT_ONBOARDING = { profileCompleted: false, tutorialCompleted: false, tutorialSkipped: false, completedAt: null, coursesIntroDismissed: false };
-const DEFAULT_PREFERENCES = { motion: 'full', focusPreset: 25, theme: 'system', sound: true, notify: false, customFocusMinutes: 40 };
+const DEFAULT_PREFERENCES = { motion: 'full', focusPreset: 25, theme: 'system', sound: true, notify: false, customFocusMinutes: 40, focusSoundscape: 'none', focusSoundVolume: 55 };
 
 function isDateString(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -156,7 +158,11 @@ export function normalizeCourse(raw, index = 0) {
     color,
     lecturer: String(raw.lecturer ?? '').trim().slice(0, 48),
     sks: Number.isInteger(sks) && sks >= 1 && sks <= 8 ? sks : null,
-    schedule: Array.isArray(raw.schedule) ? raw.schedule.map(normalizeScheduleSlot).filter(Boolean).slice(0, 8) : []
+    schedule: Array.isArray(raw.schedule) ? raw.schedule.map(normalizeScheduleSlot).filter(Boolean).slice(0, 8) : [],
+    driveUrl: (() => {
+      const value = String(raw.driveUrl ?? '').trim().slice(0, MAX_URL_LENGTH);
+      return value && /^https?:\/\//i.test(value) ? value : null;
+    })()
   };
 }
 
@@ -204,13 +210,16 @@ export function normalizeSession(raw) {
 export function normalizePreferences(raw) {
   const source = raw && typeof raw === 'object' ? raw : {};
   const custom = Math.round(numberOr(source.customFocusMinutes, DEFAULT_PREFERENCES.customFocusMinutes));
+  const focusSoundVolume = Math.round(numberOr(source.focusSoundVolume, DEFAULT_PREFERENCES.focusSoundVolume));
   return {
     motion: ['full', 'compact', 'system'].includes(source.motion) ? source.motion : DEFAULT_PREFERENCES.motion,
     focusPreset: [25, 50].includes(Number(source.focusPreset)) ? Number(source.focusPreset) : DEFAULT_PREFERENCES.focusPreset,
     theme: THEME_OPTIONS.includes(source.theme) ? source.theme : DEFAULT_PREFERENCES.theme,
     sound: typeof source.sound === 'boolean' ? source.sound : DEFAULT_PREFERENCES.sound,
     notify: typeof source.notify === 'boolean' ? source.notify : DEFAULT_PREFERENCES.notify,
-    customFocusMinutes: Math.min(180, Math.max(5, custom))
+    customFocusMinutes: Math.min(180, Math.max(5, custom)),
+    focusSoundscape: FOCUS_SOUNDSCAPES.includes(source.focusSoundscape) ? source.focusSoundscape : DEFAULT_PREFERENCES.focusSoundscape,
+    focusSoundVolume: Math.min(100, Math.max(0, focusSoundVolume))
   };
 }
 

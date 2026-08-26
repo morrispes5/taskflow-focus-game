@@ -494,7 +494,13 @@ textarea.input { min-height: 92px; padding-block: 11px; resize: vertical; }
 .schedule-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .course-list { display: grid; gap: 8px; margin-bottom: 18px; }
 .course-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--color-line); }
+.course-row:has(.icon-button) { grid-template-columns: auto minmax(0, 1fr) auto auto auto; }
 .course-row small { display: block; color: var(--color-muted); }
+.input-with-icon { position: relative; display: grid; align-items: center; }
+.input-with-icon > svg { position: absolute; z-index: 1; left: 12px; color: var(--color-muted); pointer-events: none; }
+.input-with-icon .input { padding-left: 38px; }
+.field-hint { margin: 6px 0 0; color: var(--color-cobalt); font-size: 0.76rem; font-weight: 760; }
+.range-input { width: min(170px, 42vw); accent-color: var(--color-cobalt); }
 .color-row { display: flex; gap: 8px; }
 .color-row label { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 50%; border: 2px solid transparent; }
 .color-row label.active { border-color: var(--color-ink); }

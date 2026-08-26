@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Plus, Trash2 } from 'lucide-react';
-import { validateTaskInput } from '../lib/domain.js';
+import { getSemesterWeek, validateTaskInput } from '../lib/domain.js';
 import { ESTIMATE_OPTIONS, RECURRENCE_LABELS, RECURRENCE_OPTIONS, REMINDER_OFFSETS, TASK_TYPE_LABELS, TASK_TYPES } from '../lib/storage.js';
 import { Modal } from './ui.jsx';
 
@@ -9,7 +9,7 @@ const emptyForm = {
   courseId: '', type: 'tugas', notes: '', url: '', recurrence: 'none', reminderOffsetHours: '', subtasks: []
 };
 
-export function TaskDialog({ open, task, courses = [], onClose, onSave }) {
+export function TaskDialog({ open, task, courses = [], semester, onClose, onSave }) {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState(null);
   const [subtaskDraft, setSubtaskDraft] = useState('');
@@ -62,7 +62,7 @@ export function TaskDialog({ open, task, courses = [], onClose, onSave }) {
         <div className="field-group"><label htmlFor="task-course">Mata kuliah</label><select id="task-course" className="input" value={form.courseId} onChange={(event) => setField('courseId', event.target.value)}><option value="">Tanpa mata kuliah</option>{courses.map((course) => <option key={course.id} value={course.id}>{course.code ? `${course.code} · ` : ''}{course.name}</option>)}</select></div>
       </div>
       <div className="form-grid-two">
-        <div className="field-group"><label htmlFor="task-due">Deadline <span className="label-hint">opsional</span></label><input id="task-due" className="input" type="date" value={form.dueDate} onChange={(event) => setField('dueDate', event.target.value)} aria-invalid={error?.field === 'dueDate'} /><p className="field-error">{error?.field === 'dueDate' ? error.message : ''}</p></div>
+        <div className="field-group"><label htmlFor="task-due">Deadline <span className="label-hint">opsional</span></label><input id="task-due" className="input" type="date" value={form.dueDate} onChange={(event) => setField('dueDate', event.target.value)} aria-invalid={error?.field === 'dueDate'} />{getSemesterWeek(form.dueDate, semester) && <p className="field-hint">Minggu ke-{getSemesterWeek(form.dueDate, semester)}</p>}<p className="field-error">{error?.field === 'dueDate' ? error.message : ''}</p></div>
         <div className="field-group"><label htmlFor="task-time">Jam</label><input id="task-time" className="input" type="time" value={form.dueTime} onChange={(event) => setField('dueTime', event.target.value)} aria-invalid={error?.field === 'dueTime'} /><p className="field-error">{error?.field === 'dueTime' ? error.message : ''}</p></div>
       </div>
       <div className="form-grid-two">
@@ -74,7 +74,7 @@ export function TaskDialog({ open, task, courses = [], onClose, onSave }) {
         <div className="field-group"><label htmlFor="task-remind">Pengingat</label><select id="task-remind" className="input" value={form.reminderOffsetHours} onChange={(event) => setField('reminderOffsetHours', event.target.value)}><option value="">Tidak diingatkan</option>{REMINDER_OFFSETS.map((hours) => <option key={hours} value={hours}>{hours === 0 ? 'Saat deadline' : hours < 24 ? `${hours} jam sebelumnya` : `${hours / 24} hari sebelumnya`}</option>)}</select></div>
       </div>
       {!form.courseId && <div className="field-group"><label htmlFor="task-category">Kategori <span className="label-hint">opsional</span></label><input id="task-category" className="input" value={form.category} onChange={(event) => setField('category', event.target.value)} maxLength={32} placeholder="Contoh: Organisasi" /><p className="field-error" role="alert">{error?.field === 'category' ? error.message : ''}</p></div>}
-      <div className="field-group"><label htmlFor="task-url">Tautan Classroom / Drive <span className="label-hint">opsional</span></label><input id="task-url" className="input" value={form.url} onChange={(event) => setField('url', event.target.value)} placeholder="https://" aria-invalid={error?.field === 'url'} /><p className="field-error">{error?.field === 'url' ? error.message : ''}</p></div>
+      <div className="field-group"><label htmlFor="task-url">Link tugas / Drive <span className="label-hint">opsional</span></label><input id="task-url" className="input" value={form.url} onChange={(event) => setField('url', event.target.value)} placeholder="https://" aria-invalid={error?.field === 'url'} /><p className="field-error">{error?.field === 'url' ? error.message : ''}</p></div>
       <div className="field-group"><label htmlFor="task-notes">Catatan</label><textarea id="task-notes" className="input" rows={3} value={form.notes} onChange={(event) => setField('notes', event.target.value)} maxLength={2000} placeholder="Instruksi, bab, atau rubrik singkat" /></div>
       <div className="field-group">
         <label htmlFor="task-subtask">Subtask / langkah</label>

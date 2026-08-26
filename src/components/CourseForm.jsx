@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Check, Plus, Trash2 } from 'lucide-react';
+import { Check, FolderOpen, Plus, Trash2 } from 'lucide-react';
 import { validateCourseInput } from '../lib/domain.js';
 import { COURSE_COLORS, WEEKDAY_LABELS } from '../lib/storage.js';
 import { CourseDot } from './ui.jsx';
 
-const emptyCourse = { name: '', code: '', color: COURSE_COLORS[0], lecturer: '', sks: '', schedule: [] };
+const emptyCourse = { name: '', code: '', color: COURSE_COLORS[0], lecturer: '', sks: '', driveUrl: '', schedule: [] };
 
 export function CourseManager({ courses, onSave, onDelete }) {
   const [form, setForm] = useState(emptyCourse);
@@ -23,7 +23,7 @@ export function CourseManager({ courses, onSave, onDelete }) {
   };
   const edit = (course) => {
     setEditingId(course.id);
-    setForm({ name: course.name, code: course.code || '', color: course.color, lecturer: course.lecturer || '', sks: course.sks || '', schedule: course.schedule.map((item) => ({ ...item })) });
+    setForm({ name: course.name, code: course.code || '', color: course.color, lecturer: course.lecturer || '', sks: course.sks || '', driveUrl: course.driveUrl || '', schedule: course.schedule.map((item) => ({ ...item })) });
     setError(null);
   };
   return <div className="course-manager" data-tour="courses">
@@ -36,6 +36,7 @@ export function CourseManager({ courses, onSave, onDelete }) {
             <strong>{course.name}</strong>
             <small>{[course.code, course.lecturer, course.sks ? `${course.sks} SKS` : null, course.schedule.length ? `${course.schedule.length} jadwal` : null].filter(Boolean).join(' · ') || 'Tanpa detail'}</small>
           </div>
+          {course.driveUrl && <a className="icon-button" href={course.driveUrl} target="_blank" rel="noreferrer" aria-label={`Buka folder materi ${course.name}`} title="Buka folder materi"><FolderOpen size={16} /></a>}
           <button className="text-link" type="button" onClick={() => edit(course)}>Edit</button>
           <button className="icon-button danger-hover" type="button" onClick={() => onDelete(course)} aria-label={`Hapus ${course.name}`}><Trash2 size={15} /></button>
         </li>
@@ -50,6 +51,7 @@ export function CourseManager({ courses, onSave, onDelete }) {
         <div className="field-group"><label htmlFor="course-lecturer">Dosen</label><input id="course-lecturer" className="input" value={form.lecturer} onChange={(event) => setForm((current) => ({ ...current, lecturer: event.target.value }))} maxLength={48} /></div>
         <div className="field-group"><label htmlFor="course-sks">SKS</label><input id="course-sks" className="input" type="number" min="1" max="8" value={form.sks} onChange={(event) => setForm((current) => ({ ...current, sks: event.target.value }))} /></div>
       </div>
+      <div className="field-group"><label htmlFor="course-drive">Folder Google Drive / materi <span className="label-hint">opsional</span></label><div className="input-with-icon"><FolderOpen size={16} aria-hidden="true" /><input id="course-drive" className="input" type="url" value={form.driveUrl} onChange={(event) => { setForm((current) => ({ ...current, driveUrl: event.target.value })); if (error?.field === 'driveUrl') setError(null); }} placeholder="https://drive.google.com/..." aria-invalid={error?.field === 'driveUrl'} /></div><p className="field-error" role="alert">{error?.field === 'driveUrl' ? error.message : ''}</p></div>
       <fieldset className="color-field"><legend>Warna</legend><div className="color-row">{COURSE_COLORS.map((color) => <label key={color} className={form.color === color ? 'active' : ''}><input type="radio" name="course-color" checked={form.color === color} onChange={() => setForm((current) => ({ ...current, color }))} /><i style={{ background: color }} /></label>)}</div></fieldset>
       <div className="schedule-editor">
         <p className="section-kicker">Jadwal kuliah</p>

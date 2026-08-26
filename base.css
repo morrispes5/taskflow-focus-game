@@ -27,6 +27,8 @@
   --motion-smooth: 280ms;
   --motion-cinematic: 420ms;
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
 }
 
 * { box-sizing: border-box; }
