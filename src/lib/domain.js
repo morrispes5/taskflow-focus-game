@@ -1,7 +1,7 @@
 import { addDays, differenceInCalendarDays, endOfDay, format, isWithinInterval, parseISO, startOfMonth, startOfWeek } from 'date-fns';
 import {
   normalizeTask, PRIORITY_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES, MAX_PROFILE_GOAL_LENGTH, MAX_PROFILE_NAME_LENGTH,
-  MAX_COURSE_NAME, MAX_COURSES, MAX_NOTES_LENGTH, MAX_SUBTASKS, MAX_TASK_LENGTH, MAX_URL_LENGTH, TASK_TYPES, TASK_TYPE_LABELS, COURSE_COLORS,
+  MAX_COURSE_NAME, MAX_COURSES, MAX_NOTES_LENGTH, MAX_SUBTASKS, MAX_TASK_LENGTH, MAX_URL_LENGTH, STREAK_FREEZE_LIMIT, TASK_TYPES, TASK_TYPE_LABELS, COURSE_COLORS,
   isTimeString
 } from './storage.js';
 
@@ -655,9 +655,8 @@ export function awardConsistency(progress, dateKey) {
   return { ...progress, totalXp: progress.totalXp + 5, lastConsistencyRewardDate: dateKey };
 }
 
-export function applyTaskCompletionReward(progress, task) {
+export function applyTaskCompletionReward(progress, task, dateKey = todayString()) {
   if (progress.rewardedTaskIds.includes(task.id)) return progress;
-  const dateKey = todayString();
   let next = updateStreak(progress, dateKey);
   next = awardConsistency(next, dateKey);
   next = { ...next, totalXp: next.totalXp + getTaskXp(task), rewardedTaskIds: [...next.rewardedTaskIds, task.id] };
@@ -665,8 +664,7 @@ export function applyTaskCompletionReward(progress, task) {
   return addMilestones(next, { taskCompleted: true });
 }
 
-export function applySessionReward(progress, activeSeconds, plannedMinutes = null) {
-  const dateKey = todayString();
+export function applySessionReward(progress, activeSeconds, plannedMinutes = null, dateKey = todayString()) {
   let next = updateStreak(progress, dateKey);
   next = awardConsistency(next, dateKey);
   next = { ...next, totalXp: next.totalXp + getSessionXp(activeSeconds, plannedMinutes) };
@@ -687,18 +685,56 @@ export function applyTaskToggle(data, taskId, now = Date.now()) {
   }
   if (!completed) tasks = tasks.map((task) => task.id === taskId ? { ...task, archived: false } : task);
   let progress = data.progress;
-  if (completed) progress = applyTaskCompletionReward(progress, currentTarget);
+  const dateKey = todayString();
+  const canReward = completed && !progress.rewardedTaskIds.includes(currentTarget.id);
+  const streakFreezeInfo = canReward ? getStreakFreezeInfo(progress, dateKey) : null;
+  if (completed) progress = applyTaskCompletionReward(progress, currentTarget, dateKey);
+  const freezeNote = streakFreezeInfo ? ` Streak diselamatkan pakai ${streakFreezeInfo.used} freeze bulan ini (sisa ${streakFreezeInfo.remainingAfter}).` : '';
   const message = completed
-    ? (currentTarget.recurrence !== 'none' ? `Tugas selesai. Salinan berikutnya sudah dibuat. +${getTaskXp(currentTarget)} XP.` : `Tugas selesai. +${getTaskXp(currentTarget)} XP.`)
+    ? (currentTarget.recurrence !== 'none' ? `Tugas selesai. Salinan berikutnya sudah dibuat. +${getTaskXp(currentTarget)} XP.${freezeNote}` : `Tugas selesai. +${getTaskXp(currentTarget)} XP.${freezeNote}`)
     : 'Tugas dibuka kembali.';
   return { data: { ...data, tasks, progress }, message };
 }
 
+function getStreakMonth(dateKey) {
+  const value = String(dateKey ?? '');
+  return /^\d{4}-(0[1-9]|1[0-2])-\d{2}$/.test(value) ? value.slice(0, 7) : null;
+}
+
+function getUsedStreakFreezes(progress, monthKey) {
+  if (!monthKey || progress?.streakFreezeMonth !== monthKey) return 0;
+  return Math.min(STREAK_FREEZE_LIMIT, Math.max(0, Math.floor(Number(progress?.streakFreezesUsed) || 0)));
+}
+
+export function getStreakFreezesRemaining(progress, dateKey) {
+  return STREAK_FREEZE_LIMIT - getUsedStreakFreezes(progress, getStreakMonth(dateKey));
+}
+
+function getStreakGap(progress, dateKey) {
+  if (!progress?.lastActiveDate) return null;
+  const gap = differenceInCalendarDays(parseDateString(dateKey), parseDateString(progress.lastActiveDate));
+  return Number.isFinite(gap) ? gap : null;
+}
+
+export function getStreakFreezeInfo(progress, dateKey) {
+  const gap = getStreakGap(progress, dateKey);
+  if (gap === null || gap <= 1) return null;
+  const missedDays = gap - 1;
+  const remaining = getStreakFreezesRemaining(progress, dateKey);
+  return missedDays <= remaining ? { used: missedDays, remainingAfter: remaining - missedDays } : null;
+}
+
 export function updateStreak(progress, dateKey) {
   const next = { ...progress };
+  const monthKey = getStreakMonth(dateKey);
+  const usedThisMonth = getUsedStreakFreezes(progress, monthKey);
+  next.streakFreezeMonth = monthKey;
+  next.streakFreezesUsed = usedThisMonth;
   if (next.lastActiveDate === dateKey) return next;
-  const gap = next.lastActiveDate ? differenceInCalendarDays(parseDateString(dateKey), parseDateString(next.lastActiveDate)) : null;
-  next.currentStreak = gap === 1 ? next.currentStreak + 1 : 1;
+  const gap = getStreakGap(next, dateKey);
+  const freezeInfo = gap > 1 ? getStreakFreezeInfo(progress, dateKey) : null;
+  next.currentStreak = gap === 1 || freezeInfo ? next.currentStreak + 1 : 1;
+  if (freezeInfo) next.streakFreezesUsed += freezeInfo.used;
   next.bestStreak = Math.max(next.bestStreak, next.currentStreak);
   next.lastActiveDate = dateKey;
   return next;

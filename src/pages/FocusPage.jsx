@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowLeft, ArrowRight, Check, CirclePlay, EyeOff, ExternalLink, FolderOpen, ListTodo, Pause, Play, Trophy, Volume2, VolumeX, Zap } from 'lucide-react';
 import { playNumberSequence, playRewardSequence } from '../motion/anime.js';
-import { applySessionReward, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, FOCUS_AUTO_PAUSE_AFTER_MS, getDistractionSummary, getDueInfo, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getSemesterWeek, getSessionXp, getSubtaskProgress, getTaskFocusMinutes, replaceActiveFocus, resumeDistraction, selectDailyMission } from '../lib/domain.js';
+import { applySessionReward, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, FOCUS_AUTO_PAUSE_AFTER_MS, getDistractionSummary, getDueInfo, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getSemesterWeek, getSessionXp, getStreakFreezeInfo, getSubtaskProgress, getTaskFocusMinutes, replaceActiveFocus, resumeDistraction, selectDailyMission, todayString } from '../lib/domain.js';
 import { FOCUS_SOUNDSCAPES, FOCUS_SOUNDSCAPE_LABELS } from '../lib/storage.js';
 import { playFeedbackTone, startFocusSoundscape, stopFocusSoundscape } from '../lib/audio.js';
 import { EmptyState, Illustration, Modal } from '../components/ui.jsx';
@@ -210,6 +210,9 @@ export function FocusPage({ data, commit, toggleTask }) {
   };
   const finishFocus = () => {
     const ended = Date.now();
+    const dateKey = todayString(new Date(ended));
+    const streakFreezeInfo = getStreakFreezeInfo(data.progress, dateKey);
+    const freezeNote = streakFreezeInfo ? ` Streak diselamatkan pakai ${streakFreezeInfo.used} freeze bulan ini (sisa ${streakFreezeInfo.remainingAfter}).` : '';
     stopFocusSoundscape();
     feedback('complete');
     commit((current) => {
@@ -219,9 +222,9 @@ export function FocusPage({ data, commit, toggleTask }) {
       const activeSeconds = getFocusActiveSeconds(closedFocus, ended);
       const distractionSeconds = getDistractionSummary(closedFocus, ended).totalSeconds;
       const session = { id: ended, taskId: closedFocus.taskId, plannedMinutes: closedFocus.plannedMinutes, activeSeconds, status: 'completed', startedAt: closedFocus.sessionStartedAt, endedAt: ended, rewardApplied: true, note: '', distractions: closedFocus.distractions, distractionSeconds };
-      const progress = applySessionReward(current.progress, activeSeconds, closedFocus.plannedMinutes);
+      const progress = applySessionReward(current.progress, activeSeconds, closedFocus.plannedMinutes, dateKey);
       return { ...current, progress, sessions: [...current.sessions, session], activeFocus: { ...closedFocus, status: 'break', activeSeconds, runningSince: null, breakEndsAt: ended + closedFocus.breakMinutes * 60000, sessionId: ended } };
-    }, 'Sesi selesai. Reward XP masuk.');
+    }, `Sesi selesai. Reward XP masuk.${freezeNote}`);
     if (data.preferences.notify) sendNotification('Focus Run selesai', task ? `Sesi untuk “${task.text}” sudah berakhir.` : 'Sesi fokus selesai.');
     requestAnimationFrame(() => { playRewardSequence(rewardRef.current, reduced); playNumberSequence(rewardRef.current, reduced); });
   };

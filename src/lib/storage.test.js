@@ -1,7 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import {
-  STORAGE_KEYS, createEmptyAppData, createWorkspaceStore, normalizeAppData, normalizeTask, parseBackupPayload
+  STORAGE_KEYS, createEmptyAppData, createWorkspaceStore, normalizeAppData, normalizeProgress, normalizeTask, parseBackupPayload
 } from './storage.js';
 
 function createStorage(initial = {}) {
@@ -31,6 +31,12 @@ describe('storage migration', () => {
     expect(migrated.completedAt).toBeNull();
     expect(migrated.updatedAt).toBe(100);
     expect(migrated.estimateMinutes).toBe(25);
+  });
+
+  it('menambahkan field streak freeze secara additive dan membatasi kuotanya', () => {
+    expect(normalizeProgress({ totalXp: 12 })).toMatchObject({ streakFreezeMonth: null, streakFreezesUsed: 0 });
+    expect(normalizeProgress({ streakFreezeMonth: '2026-08', streakFreezesUsed: 9 })).toMatchObject({ streakFreezeMonth: '2026-08', streakFreezesUsed: 3 });
+    expect(normalizeProgress({ streakFreezeMonth: 'Agustus 2026', streakFreezesUsed: -1 }).streakFreezeMonth).toBeNull();
   });
 
   it('memulai browser baru dengan workspace kosong dan onboarding profil', async () => {

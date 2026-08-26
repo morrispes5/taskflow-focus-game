@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { addDays } from 'date-fns';
 import {
-  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, getTaskFocusMinutes,
+  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
   getProfileRecommendations, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
-  getSemesterWeek, replaceActiveFocus, resumeDistraction, selectDailyMission, sortTasks, spawnNextOccurrence, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput
+  getSemesterWeek, replaceActiveFocus, resumeDistraction, selectDailyMission, sortTasks, spawnNextOccurrence, todayString, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput
 } from './domain.js';
 import { createEmptyAppData } from './storage.js';
 
@@ -156,10 +157,53 @@ describe('task domain', () => {
     expect(analytics.distractionMinutes).toBe(2);
   });
 
-  it('menaikkan streak untuk hari berurutan dan reset setelah jeda', () => {
-    const base = { totalXp: 0, level: 1, currentStreak: 1, bestStreak: 1, lastActiveDate: '2026-08-24' };
-    expect(updateStreak(base, '2026-08-25').currentStreak).toBe(2);
-    expect(updateStreak({ ...base, lastActiveDate: '2026-08-22' }, '2026-08-25').currentStreak).toBe(1);
+  it('menaikkan streak untuk hari berurutan tanpa memakai freeze', () => {
+    const base = { totalXp: 0, level: 1, currentStreak: 1, bestStreak: 1, lastActiveDate: '2026-08-24', streakFreezeMonth: '2026-08', streakFreezesUsed: 0 };
+    const next = updateStreak(base, '2026-08-25');
+    expect(next).toMatchObject({ currentStreak: 2, bestStreak: 2, streakFreezeMonth: '2026-08', streakFreezesUsed: 0 });
+    expect(getStreakFreezeInfo(base, '2026-08-25')).toBeNull();
+    expect(getStreakFreezesRemaining(next, '2026-08-25')).toBe(3);
+  });
+
+  it('menyelamatkan streak untuk satu hari terlewat jika freeze cukup', () => {
+    const base = { totalXp: 0, level: 1, currentStreak: 4, bestStreak: 4, lastActiveDate: '2026-08-24', streakFreezeMonth: '2026-08', streakFreezesUsed: 0 };
+    expect(getStreakFreezeInfo(base, '2026-08-26')).toEqual({ used: 1, remainingAfter: 2 });
+    expect(updateStreak(base, '2026-08-26')).toMatchObject({ currentStreak: 5, bestStreak: 5, streakFreezeMonth: '2026-08', streakFreezesUsed: 1, lastActiveDate: '2026-08-26' });
+  });
+
+  it('mereset streak jika hari terlewat lebih banyak dari sisa freeze', () => {
+    const base = { totalXp: 0, level: 1, currentStreak: 7, bestStreak: 7, lastActiveDate: '2026-08-20', streakFreezeMonth: '2026-08', streakFreezesUsed: 2 };
+    expect(getStreakFreezeInfo(base, '2026-08-24')).toBeNull();
+    expect(updateStreak(base, '2026-08-24')).toMatchObject({ currentStreak: 1, bestStreak: 7, streakFreezeMonth: '2026-08', streakFreezesUsed: 2, lastActiveDate: '2026-08-24' });
+  });
+
+  it('mereset kuota freeze saat masuk bulan kalender baru', () => {
+    const base = { totalXp: 0, level: 1, currentStreak: 2, bestStreak: 2, lastActiveDate: '2026-08-30', streakFreezeMonth: '2026-08', streakFreezesUsed: 3 };
+    expect(getStreakFreezesRemaining(base, '2026-09-02')).toBe(3);
+    expect(getStreakFreezeInfo(base, '2026-09-02')).toEqual({ used: 2, remainingAfter: 1 });
+    expect(updateStreak(base, '2026-09-02')).toMatchObject({ currentStreak: 3, streakFreezeMonth: '2026-09', streakFreezesUsed: 2 });
+  });
+
+  it('membatasi pemakaian maksimal tiga freeze per bulan', () => {
+    let progress = { totalXp: 0, level: 1, currentStreak: 1, bestStreak: 1, lastActiveDate: '2026-08-01', streakFreezeMonth: '2026-08', streakFreezesUsed: 0 };
+    progress = updateStreak(progress, '2026-08-03');
+    progress = updateStreak(progress, '2026-08-05');
+    progress = updateStreak(progress, '2026-08-07');
+    expect(progress).toMatchObject({ currentStreak: 4, streakFreezeMonth: '2026-08', streakFreezesUsed: 3 });
+    expect(getStreakFreezesRemaining(progress, '2026-08-07')).toBe(0);
+    expect(getStreakFreezeInfo(progress, '2026-08-09')).toBeNull();
+    expect(updateStreak(progress, '2026-08-09')).toMatchObject({ currentStreak: 1, streakFreezesUsed: 3 });
+  });
+
+  it('menambahkan catatan freeze pada toast saat task diselesaikan', () => {
+    const dateKey = todayString();
+    const { data: next, message } = applyTaskToggle({
+      ...createEmptyAppData(),
+      tasks: [task()],
+      progress: { ...createEmptyAppData().progress, currentStreak: 3, bestStreak: 3, lastActiveDate: todayString(addDays(new Date(), -2)), streakFreezeMonth: dateKey.slice(0, 7), streakFreezesUsed: 0 }
+    }, 1);
+    expect(next.progress.streakFreezesUsed).toBe(1);
+    expect(message).toContain('Streak diselamatkan pakai 1 freeze bulan ini (sisa 2).');
   });
 
   it('memvalidasi profil dan membuat rekomendasi offline dari tujuan', () => {

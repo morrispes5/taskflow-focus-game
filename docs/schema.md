@@ -14,12 +14,14 @@ Object store version tetap `1`. Yang berubah hanya isi record.
   semester: { name: string, startDate: string | null, endDate: string | null } | null,
   profile: { name, role, goal, tagline },
   onboarding: { profileCompleted, tutorialCompleted, tutorialSkipped, completedAt, coursesIntroDismissed },
-  progress: { totalXp, level, currentStreak, bestStreak, lastActiveDate, lastConsistencyRewardDate, rewardedTaskIds, milestones, notifiedKeys },
+  progress: { totalXp, level, currentStreak, bestStreak, lastActiveDate, streakFreezeMonth, streakFreezesUsed, lastConsistencyRewardDate, rewardedTaskIds, milestones, notifiedKeys },
   sessions: Session[],
   activeFocus: object | null,
   preferences: { motion, focusPreset, theme, sound, notify, customFocusMinutes, focusSoundscape, focusSoundVolume }
 }
 ```
+
+`progress.streakFreezeMonth` menyimpan bulan kalender aktif (`yyyy-MM` atau `null`), sedangkan `progress.streakFreezesUsed` menyimpan jumlah freeze yang terpakai pada bulan tersebut. Keduanya dimigrasikan secara additive; data lama mendapat `null` dan `0`.
 
 ## Task
 

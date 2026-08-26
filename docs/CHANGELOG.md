@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.1.3 - Streak freeze
+
+- Progress sekarang memiliki streak freeze per bulan kalender, dengan kuota maksimal tiga dan migrasi additive.
+- Streak dapat diselamatkan dari hari terlewat jika kuota freeze cukup; sisa kuota tampil di Beranda dan dicatat pada toast reward.
+
 ## 5.1.2 - Focus Run duration guard
 
 - Durasi awal Focus Run sekarang mengikuti estimasi task (`15`, `25`, `50`, atau `90` menit) dan hanya memakai preset global sebagai fallback.

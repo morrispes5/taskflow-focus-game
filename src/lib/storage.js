@@ -29,6 +29,7 @@ export const MAX_COURSE_CODE = 16;
 export const MAX_SESSION_NOTE = 240;
 export const MAX_DISTRACTIONS = 100;
 export const MAX_URL_LENGTH = 300;
+export const STREAK_FREEZE_LIMIT = 3;
 export const PRIORITIES = ['high', 'medium', 'low'];
 export const ESTIMATE_OPTIONS = [15, 25, 50, 90];
 export const PRIORITY_LABELS = { high: 'Tinggi', medium: 'Sedang', low: 'Rendah' };
@@ -55,6 +56,10 @@ function isDateString(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00`);
   return !Number.isNaN(date.getTime()) && `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` === value;
+}
+
+function isMonthString(value) {
+  return typeof value === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 }
 
 function numberOr(value, fallback) {
@@ -184,6 +189,8 @@ export function normalizeProgress(raw) {
     currentStreak: Math.max(0, numberOr(source.currentStreak, 0)),
     bestStreak: Math.max(0, numberOr(source.bestStreak, 0)),
     lastActiveDate: isDateString(source.lastActiveDate) ? source.lastActiveDate : null,
+    streakFreezeMonth: isMonthString(source.streakFreezeMonth) ? source.streakFreezeMonth : null,
+    streakFreezesUsed: Math.min(STREAK_FREEZE_LIMIT, Math.max(0, Math.floor(numberOr(source.streakFreezesUsed, 0)))),
     lastConsistencyRewardDate: isDateString(source.lastConsistencyRewardDate) ? source.lastConsistencyRewardDate : null,
     rewardedTaskIds: Array.isArray(source.rewardedTaskIds) ? source.rewardedTaskIds.map(Number).filter(Number.isFinite) : [],
     milestones: Array.isArray(source.milestones) ? source.milestones.map(String) : [],

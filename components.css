@@ -99,7 +99,7 @@
 .level-number { margin-top: 42px; color: var(--color-on-ink); font-size: 3.35rem; font-weight: 780; line-height: 1; }
 .level-number small { color: #8e9caf; font-size: 0.86rem; font-weight: 700; }
 .progress-card .meter-group { margin-top: auto; }
-.progress-foot { display: flex; justify-content: space-between; gap: 10px; margin-top: 18px; color: #9da9b8; font-size: 0.72rem; }
+.progress-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 18px; color: #9da9b8; font-size: 0.72rem; }
 .progress-foot span { display: inline-flex; align-items: center; gap: 5px; }
 .section-heading-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 15px; }
 .section-heading-row h2 { font-size: 1.32rem; }
