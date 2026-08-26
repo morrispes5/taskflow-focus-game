@@ -1,9 +1,10 @@
 # TaskFlow Design System dan Product Direction
 
-Status: Baseline v1
-Target: aplikasi manajemen tugas offline untuk pelajar dan mahasiswa
-Platform: web responsive, mobile-first
+Status: Baseline v2 (schemaVersion 5)
+Target: ruang kerja semester offline untuk pelajar dan mahasiswa
+Platform: web responsive, mobile-first, PWA
 Bahasa UI: Bahasa Indonesia
+Kontrak data: lihat `docs/schema.md`. Panduan AI: `AGENTS.md`.
 
 ## 1. Ringkasan Produk
 
@@ -102,11 +103,12 @@ Level hanya berfungsi sebagai penanda perjalanan. Tidak ada fitur terkunci, huku
 
 Navigasi utama:
 
-- **Beranda**: misi berikutnya dan progres hari ini.
-- **Tugas**: quest board dan pengelolaan tugas.
+- **Beranda**: misi berikutnya, agenda hari ini, countdown, dan progres hari ini.
+- **Tugas**: quest board, subtask, filter mata kuliah, arsip.
+- **Kalender**: deadline, ujian, dan jadwal kuliah per bulan.
 - **Fokus**: Focus Run yang sedang berjalan atau sesi baru.
-- **Analitik**: perjalanan produktivitas dan ringkasan data.
-- **Pengaturan**: profil, preferensi, backup, dan reset data.
+- **Analitik**: perjalanan produktivitas per mata kuliah dan ringkasan data.
+- **Pengaturan**: mata kuliah, semester, profil, tema, pengingat, backup, dan reset data.
 
 Focus Run dapat dibuka dari Beranda atau Tugas, tetapi memiliki halaman `focus.html` sendiri agar mode fokus tidak terasa seperti modal biasa.
 
@@ -432,3 +434,15 @@ Setiap komponen harus memiliki state default, hover, focus-visible, disabled, er
 - Reduced-motion tetap membuat aplikasi lengkap dan dapat dipakai.
 - Tampilan tidak terasa seperti template dashboard generik.
 - Data tugas lama tetap muncul setelah fitur baru diterapkan.
+- Mata kuliah, kalender, dark mode, dan PWA tersedia tanpa login.
+
+## 14. Baseline v2 — ruang kerja semester
+
+Tambahan yang tidak mengubah kepribadian produk:
+
+- Mata kuliah adalah entitas, bukan string kategori.
+- Tugas boleh punya jam, tipe, catatan, subtask, tautan, pin, arsip, dan pengulangan harian/mingguan.
+- Kalender membaca `dueDate`/`dueTime` dan `course.schedule`.
+- Pengingat browser dan chime Focus Run hanya berjalan saat aplikasi terbuka.
+- Tema `light` | `dark` | `system` memakai token yang sama di `base.css`.
+- Tidak ada backend. Tidak ada wipe data saat migrasi ke schema 5.

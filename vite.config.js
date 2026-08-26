@@ -9,6 +9,7 @@ export default defineConfig({
         home: 'index.html',
         tasks: 'tasks.html',
         focus: 'focus.html',
+        calendar: 'calendar.html',
         analytics: 'analytics.html',
         settings: 'settings.html'
       }

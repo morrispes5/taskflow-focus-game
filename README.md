@@ -1,61 +1,56 @@
 # TaskFlow
 
-TaskFlow adalah aplikasi manajemen tugas offline untuk pelajar dan mahasiswa. Pengalaman utamanya bukan hanya menambah lalu mencentang tugas, tetapi memilih satu misi, menjalankan sesi Focus Run, dan melihat progres dari aktivitas nyata.
+TaskFlow adalah ruang kerja fokus **offline** untuk pelajar dan mahasiswa. Pengalaman utamanya bukan hanya menambah lalu mencentang tugas, tetapi memilih satu misi, menjalankan sesi Focus Run, dan melihat progres dari aktivitas nyata — termasuk mata kuliah, kalender deadline, dan subtask.
 
-Repository yang disiapkan untuk publikasi: `taskflow-focus-game`.
+Live: [morrispes5.github.io/taskflow-focus-game](https://morrispes5.github.io/taskflow-focus-game/)
+
+Repository: `taskflow-focus-game` (v4).
 
 ## Fitur
 
-- Beranda dengan misi harian, statistik, XP, level, streak, dan milestone.
-- Task board dengan quick add, tambah detail, edit, hapus, validasi, pencarian, filter, dan pengurutan.
-- Focus Run 25 atau 50 menit dengan jeda, lanjutkan, akhiri, reward XP, dan catatan sesi.
-- Analitik completion rate, tugas aktif, keterlambatan, fokus, penyelesaian tepat waktu, kategori, prioritas, dan perjalanan tujuh hari.
-- Pengaturan profil, preferensi motion, preset fokus, export JSON, import JSON tervalidasi, dan reset dengan konfirmasi.
-- First-run flow tanpa login: workspace baru dimulai kosong, profil wajib diisi, lalu tutorial interaktif dan rekomendasi task offline muncul sesuai tujuan pengguna.
-- Rekomendasi personal bersifat rules-based, dapat diedit dan dipilih sebagian sebelum masuk ke task board.
-- Data tersimpan lokal melalui IndexedDB browser, sehingga tidak membutuhkan login, backend, atau database eksternal.
-- Motion memakai Motion for React untuk transisi/layout dan Anime.js untuk sequence reward yang kecil dan terarah.
-- Ilustrasi state tersimpan lokal di `public/assets/illustrations/` agar aplikasi tetap dapat berjalan offline.
+- Beranda dengan misi harian, agenda hari ini, countdown deadline, XP, level, streak, dan progres mata kuliah.
+- Task board dengan quick add, subtask, catatan, tautan, pin, arsip, duplikat, filter mata kuliah/jenis, dan tugas berulang.
+- Mata kuliah sebagai entitas: warna, kode, dosen, SKS, dan jadwal kuliah.
+- Kalender bulan untuk deadline, ujian, dan jadwal kelas.
+- Focus Run 25, 50, atau durasi custom, dengan jeda, subtask, catatan sesi, chime, dan notifikasi selesai.
+- Analitik completion rate, per mata kuliah, jenis tugas, keterlambatan, dan perjalanan tujuh hari.
+- Pengaturan profil, semester, tema (terang/gelap/sistem), motion, bunyi, pengingat browser, export/import JSON, dan reset.
+- First-run tanpa login: profil, tutorial, rekomendasi rules-based, lalu ajakan opsional menambah mata kuliah.
+- Data tersimpan lokal melalui IndexedDB. Tidak ada akun atau backend.
+- Dapat dipasang sebagai PWA. Pengingat hanya berjalan saat TaskFlow terbuka.
 
 ## Struktur
 
 ```text
 foldervio/
-├── index.html
-├── tasks.html
-├── focus.html
-├── analytics.html
-├── settings.html
+├── index.html tasks.html focus.html calendar.html analytics.html settings.html
 ├── src/
 │   ├── app.jsx
 │   ├── main.jsx
-│   ├── lib/
-│   │   ├── domain.js
-│   │   └── storage.js
-│   └── motion/
-│       └── anime.js
-├── public/assets/illustrations/
-├── base.css
-├── components.css
+│   ├── nav.js
+│   ├── pages/
+│   ├── components/
+│   ├── lib/          storage.js, domain.js, reminders.js
+│   └── motion/anime.js
+├── public/           ilustrasi, manifest, service worker
+├── docs/             schema.md, CHANGELOG.md
+├── AGENTS.md
 ├── design.md
-├── package.json
 └── vite.config.js
 ```
 
 ## Menjalankan
-
-Pastikan Node.js tersedia, lalu jalankan:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Buka alamat yang ditampilkan Vite, biasanya `http://127.0.0.1:5173/`.
+Buka alamat Vite, biasanya `http://127.0.0.1:5173/`.
 
 ## GitHub Pages
 
-Workflow di `.github/workflows/deploy.yml` membangun folder `dist` dan menerbitkannya ke GitHub Pages setiap kali branch `main` menerima push. Setelah repository GitHub dibuat dan Pages menggunakan source `GitHub Actions`, deployment berjalan otomatis.
+Workflow `.github/workflows/deploy.yml` membangun `dist` dan menerbitkannya ke Pages setiap push ke `main`. `vite.config.js` memakai `base: './'` agar aset relatif di `/taskflow-focus-game/`.
 
 ## Verifikasi
 
@@ -64,12 +59,12 @@ npm test
 npm run build
 ```
 
-`npm test` menjalankan unit test untuk domain tugas, statistik, streak, validasi, migrasi, dan backup. `npm run build` memverifikasi seluruh entry page multi-page React.
+`npm test` mencakup domain tugas, mata kuliah, recurrence, kalender, reminder, migrasi schema 5, dan backup. `npm run build` memverifikasi seluruh entry HTML termasuk `calendar.html`.
 
-## Penyimpanan Lokal
+## Penyimpanan lokal
 
-Setiap perangkat dan profil browser memiliki workspace IndexedDB sendiri. Pengunjung baru selalu memulai dengan profil, tugas, sesi fokus, dan progres kosong. Data tetap ada saat halaman ditutup atau dimuat ulang, tetapi tidak tersinkron ke perangkat lain.
+Setiap perangkat/profil browser punya workspace IndexedDB sendiri. Schema v5 **mengisi field baru** pada data lama dan tidak menghapus tugas yang sudah ada. Backup JSON v4 masih bisa diimport.
 
-Versi IndexedDB ini melakukan reset satu kali terhadap key TaskFlow lama berbasis `localStorage`, termasuk demo task dari versi awal, agar semua browser memulai dari onboarding yang bersih. Pengguna perangkat bersama dapat memilih **Mulai workspace baru** dari Pengaturan untuk menghapus data lokal dan memulai lagi.
+Pengguna perangkat bersama dapat memilih **Mulai workspace baru** dari Pengaturan.
 
-Lihat [design.md](design.md) untuk keputusan produk, sistem visual, kontrak data, motion, dan batasan fitur fase pertama.
+Lihat [design.md](design.md), [docs/schema.md](docs/schema.md), dan [AGENTS.md](AGENTS.md) untuk keputusan produk dan kontrak data.

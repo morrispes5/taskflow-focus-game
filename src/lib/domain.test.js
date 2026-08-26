@@ -1,18 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import {
-  filterTasks, getLevel, getProfileRecommendations, getSessionXp, getTaskXp, selectDailyMission, sortTasks, updateStreak, validateProfileInput
+  applyTaskToggle, filterTasks, getAgendaForDay, getCalendarDays, getCountdownLabel, getLevel,
+  getProfileRecommendations, getSessionXp, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
+  selectDailyMission, sortTasks, spawnNextOccurrence, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput
 } from './domain.js';
+import { createEmptyAppData } from './storage.js';
 
 const task = (overrides = {}) => ({
   id: 1,
   text: 'Tugas contoh',
   completed: false,
+  archived: false,
   createdAt: 100,
   updatedAt: 100,
   completedAt: null,
   dueDate: null,
+  dueTime: null,
   priority: 'medium',
   category: null,
+  type: 'pribadi',
+  pinned: false,
+  recurrence: 'none',
+  subtasks: [],
   ...overrides
 });
 
@@ -27,11 +36,27 @@ describe('task domain', () => {
     expect(mission.text).toBe('Terlambat');
   });
 
-  it('memfilter status, prioritas, kategori, dan pencarian', () => {
-    const tasks = [task({ id: 1, text: 'Baca React', priority: 'high', category: 'Kuliah' }), task({ id: 2, text: 'Selesai CSS', completed: true, category: 'Proyek' })];
+  it('memilih tugas yang dipin sebelum terlambat', () => {
+    const reference = new Date(2026, 7, 25);
+    const mission = selectDailyMission([
+      task({ id: 1, text: 'Terlambat', dueDate: '2026-08-24' }),
+      task({ id: 2, text: 'Dipin', pinned: true, priority: 'low' })
+    ], reference);
+    expect(mission.text).toBe('Dipin');
+  });
+
+  it('memfilter status, prioritas, kategori, pencarian, tipe, dan mata kuliah', () => {
+    const tasks = [
+      task({ id: 1, text: 'Baca React', priority: 'high', category: 'Kuliah', type: 'bacaan', courseId: 8 }),
+      task({ id: 2, text: 'Selesai CSS', completed: true, category: 'Proyek', type: 'proyek' }),
+      task({ id: 3, text: 'Arsip lama', archived: true, type: 'tugas' })
+    ];
     expect(filterTasks(tasks, { status: 'active', search: 'react' })).toHaveLength(1);
     expect(filterTasks(tasks, { priority: 'high', category: 'Kuliah' })[0].id).toBe(1);
     expect(filterTasks(tasks, { status: 'completed' })[0].id).toBe(2);
+    expect(filterTasks(tasks, { type: 'bacaan', courseId: 8 })).toHaveLength(1);
+    expect(filterTasks(tasks, { archived: 'archived' })).toHaveLength(1);
+    expect(filterTasks(tasks, { archived: 'active' })).toHaveLength(2);
   });
 
   it('mengurutkan berdasarkan deadline dan prioritas', () => {
@@ -42,6 +67,7 @@ describe('task domain', () => {
 
   it('menghitung reward dan level secara deterministik', () => {
     expect(getTaskXp(task({ priority: 'high' }))).toBe(15);
+    expect(getTaskXp(task({ priority: 'high', type: 'ujian' }))).toBe(20);
     expect(getSessionXp(3600)).toBe(6);
     expect(getLevel(0)).toBe(1);
     expect(getLevel(100)).toBe(2);
@@ -61,5 +87,47 @@ describe('task domain', () => {
     expect(recommendations[0].category).toBe('Belajar');
     expect(recommendations[0].priority).toBe('medium');
     expect(getProfileRecommendations({ role: 'mahasiswa', goal: '' })).toEqual([]);
+  });
+
+  it('memvalidasi mata kuliah dan tugas lanjutan', () => {
+    expect(validateCourseInput({ name: '' })?.field).toBe('name');
+    expect(validateCourseInput({ name: 'PBO' }, [makeCourse({ name: 'PBO' }, 1)])?.field).toBe('name');
+    expect(validateTaskInput({ text: 'OK', url: 'drive.google.com' })?.field).toBe('url');
+    expect(validateTaskInput({ text: 'OK', dueTime: '25:00' })?.field).toBe('dueTime');
+  });
+
+  it('membuat salinan tugas berulang ke tanggal berikutnya', () => {
+    const next = spawnNextOccurrence(task({ dueDate: '2026-08-25', recurrence: 'weekly', text: 'Jurnal' }), 500);
+    expect(next.dueDate).toBe('2026-09-01');
+    expect(next.completed).toBe(false);
+    expect(next.recurrence).toBe('weekly');
+  });
+
+  it('mengarsipkan tugas berulang dan menambahkan salinan saat selesai', () => {
+    const { data } = applyTaskToggle({
+      ...createEmptyAppData(),
+      tasks: [task({ id: 11, text: 'Praktikum', recurrence: 'weekly', dueDate: '2026-08-25' })]
+    }, 11, 1000);
+    const original = data.tasks.find((item) => item.id === 11);
+    const clone = data.tasks.find((item) => item.id !== 11);
+    expect(original.completed).toBe(true);
+    expect(original.archived).toBe(true);
+    expect(clone.dueDate).toBe('2026-09-01');
+    expect(clone.completed).toBe(false);
+  });
+
+  it('menyusun agenda hari ini dan tanda kalender', () => {
+    const reference = new Date(2026, 7, 25, 9, 0, 0);
+    const courses = [makeCourse({ name: 'PBO', schedule: [{ day: 2, start: '08:00', end: '10:00', room: 'Lab 1' }] }, 3)];
+    const agenda = getTodayAgenda([task({ id: 4, text: 'Quiz PBO', dueDate: '2026-08-25', dueTime: '11:00', type: 'kuis' })], courses, reference);
+    expect(agenda.classes).toHaveLength(1);
+    expect(agenda.due).toHaveLength(1);
+    expect(getUpcomingDeadlines([task({ id: 4, dueDate: '2026-08-25' })], reference, 3)).toHaveLength(1);
+    expect(getCountdownLabel(task({ dueDate: '2026-08-26' }), reference)).toContain('hari');
+    const days = getCalendarDays(reference);
+    expect(days).toHaveLength(42);
+    const dayAgenda = getAgendaForDay([task({ id: 4, text: 'Quiz PBO', dueDate: '2026-08-25', dueTime: '11:00' })], courses, '2026-08-25');
+    expect(dayAgenda.some((item) => item.kind === 'class')).toBe(true);
+    expect(dayAgenda.some((item) => item.kind === 'task')).toBe(true);
   });
 });

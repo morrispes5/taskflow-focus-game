@@ -35,7 +35,7 @@ body { min-width: 320px; min-height: 100%; margin: 0; background: var(--color-pa
 body::selection { background: var(--color-cobalt); color: #fff; }
 img, svg { display: block; max-width: 100%; }
 a { color: inherit; text-decoration: none; }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled, input:disabled, select:disabled { cursor: not-allowed; opacity: 0.58; }
 h1, h2, h3, p { margin: 0; }
@@ -56,6 +56,27 @@ ul { margin: 0; padding: 0; }
 .danger-text { color: var(--color-coral); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 :focus-visible { outline: 3px solid rgba(40, 100, 240, 0.32); outline-offset: 3px; }
+
+html[data-theme="dark"] {
+  --color-ink: #e8edf4;
+  --color-ink-soft: #c5ced9;
+  --color-muted: #93a0b0;
+  --color-paper: #121820;
+  --color-surface: #1a222c;
+  --color-surface-muted: #232d39;
+  --color-line: #2d3a48;
+  --color-line-strong: #3d4d5e;
+  --color-cobalt-soft: #1c2f55;
+  --color-mint-soft: #14352d;
+  --color-amber-soft: #3a2e14;
+  --color-coral-soft: #3a1e1e;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28), 0 5px 16px rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 22px 58px rgba(0, 0, 0, 0.42);
+}
+
+html[data-theme="dark"] .app-header { background: rgba(18, 24, 32, 0.92); border-bottom-color: var(--color-line); }
+html[data-theme="dark"] .home-hero-preview,
+html[data-theme="dark"] .progress-card { box-shadow: 0 20px 42px rgba(0, 0, 0, 0.35); }
 
 @media (max-width: 760px) {
   .container { width: min(100% - 28px, var(--container)); }
