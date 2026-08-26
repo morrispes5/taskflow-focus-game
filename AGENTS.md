@@ -62,6 +62,8 @@ PowerShell di mesin ini bisa memblokir `npm.ps1`. Pakai `cmd /c "npm test"` jika
 - Migrasi tugas v4 → v5 tidak menghapus teks/tugas.
 - Recurrence weekly membuat salinan `dueDate + 7` dan mengarsipkan yang lama.
 - Filter course/type/arsip.
+- Interval semester: tanggal di dalam/luar batas, analitik `scope: 'semester'` vs `'all'`.
+- Reminder mengabaikan tugas selesai/arsip dan menghormati offset jam.
 - `npm run build` menghasilkan `calendar.html` dan entry lama.
 
 ## Gaya UI

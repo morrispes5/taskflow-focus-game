@@ -246,6 +246,8 @@ textarea.input { min-height: 92px; padding-block: 11px; resize: vertical; }
 .break-note { color: #6ee2c1; font-size: 0.79rem; font-weight: 760; }
 
 .analytics-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.analytics-scope { align-items: flex-start; flex-direction: column; margin-bottom: 22px; }
+.analytics-scope-hint { margin: 0; font-size: 0.82rem; }
 .analytics-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr); gap: 14px; }
 .analytics-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
 .analytics-highlight { display: inline-flex; align-items: center; gap: 5px; color: var(--color-amber); font-size: 0.78rem; font-weight: 820; }

@@ -33,4 +33,22 @@ describe('reminders', () => {
     expect(progress.notifiedKeys).toHaveLength(200);
     expect(progress.notifiedKeys.at(-1)).toBe('new-1');
   });
+
+  it('mengabaikan tugas selesai, terarsip, atau tanpa deadline', () => {
+    const reference = new Date(2026, 7, 26, 8, 0, 0);
+    expect(getDueReminders([task({ completed: true })], { notifiedKeys: [] }, reference)).toEqual([]);
+    expect(getDueReminders([task({ archived: true })], { notifiedKeys: [] }, reference)).toEqual([]);
+    expect(getDueReminders([task({ dueDate: null })], { notifiedKeys: [] }, reference)).toEqual([]);
+  });
+
+  it('menghormati offset pengingat dan jendela default 24 jam', () => {
+    const early = new Date(2026, 7, 25, 7, 0, 0);
+    expect(getDueReminders([task({ reminderOffsetHours: 1 })], { notifiedKeys: [] }, early)).toEqual([]);
+    const oneHourBefore = new Date(2026, 7, 26, 8, 10, 0);
+    expect(getDueReminders([task({ reminderOffsetHours: 1 })], { notifiedKeys: [] }, oneHourBefore)).toHaveLength(1);
+    const defaultWindow = new Date(2026, 7, 25, 10, 0, 0);
+    expect(getDueReminders([task({ reminderOffsetHours: null })], { notifiedKeys: [] }, defaultWindow)).toHaveLength(1);
+    const tooEarlyForDefault = new Date(2026, 7, 24, 8, 0, 0);
+    expect(getDueReminders([task({ reminderOffsetHours: null })], { notifiedKeys: [] }, tooEarlyForDefault)).toEqual([]);
+  });
 });

@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.0.1 — filter analitik semester
+
+- Analitik bisa difilter ke rentang semester (deadline / aktivitas di antara tanggal mulai–selesai) atau semua waktu.
+- Validasi tanggal semester: selesai tidak boleh sebelum mulai.
+- Tes khusus interval semester, scope analitik, dan jendela reminder (selesai/arsip/offset).
+
 ## 4.0.0 — ruang kerja semester
 
 Paket pengayaan offline untuk pelajar/mahasiswa. Data lama tidak dihapus.

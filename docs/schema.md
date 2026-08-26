@@ -52,6 +52,12 @@ Saat tugas `daily`/`weekly` diselesaikan, tugas itu diarsipkan dan salinan aktif
 
 Menghapus mata kuliah **tidak** menghapus tugas; `courseId` di-null-kan.
 
+## Filter analitik semester
+
+`getAnalytics(..., { semester, scope })` dengan `scope: 'semester' | 'all'`.
+
+Tugas masuk semester jika `dueDate` (atau `completedAt` / `createdAt` jika tidak ada deadline) berada di `startDate`–`endDate` (inklusif). Sesi fokus memakai `endedAt` atau `startedAt`. Batas boleh terbuka: hanya mulai, atau hanya selesai.
+
 ## Backup
 
 `createBackup()` menulis `version: 5` plus `courses` dan `semester`.  

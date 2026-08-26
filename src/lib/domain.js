@@ -245,8 +245,47 @@ export function getCourseProgress(courses, tasks) {
   });
 }
 
-export function getAnalytics(tasks, sessions, courses = [], reference = new Date()) {
-  const live = visibleTasks(tasks);
+export function hasSemesterRange(semester) {
+  return Boolean(semester && (semester.startDate || semester.endDate));
+}
+
+export function isDateInSemester(dateKey, semester) {
+  if (!hasSemesterRange(semester)) return true;
+  if (!dateKey) return false;
+  if (semester.startDate && dateKey < semester.startDate) return false;
+  if (semester.endDate && dateKey > semester.endDate) return false;
+  return true;
+}
+
+export function dateKeyFromTimestamp(value) {
+  if (!Number.isFinite(Number(value))) return null;
+  return todayString(new Date(Number(value)));
+}
+
+export function taskInSemester(task, semester) {
+  const dateKey = task.dueDate || dateKeyFromTimestamp(task.completedAt) || dateKeyFromTimestamp(task.createdAt);
+  return isDateInSemester(dateKey, semester);
+}
+
+export function sessionInSemester(session, semester) {
+  return isDateInSemester(dateKeyFromTimestamp(session.endedAt || session.startedAt), semester);
+}
+
+export function validateSemesterInput(input) {
+  const source = input && typeof input === 'object' ? input : {};
+  const startDate = source.startDate || '';
+  const endDate = source.endDate || '';
+  if (startDate && !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return { field: 'startDate', message: 'Tanggal mulai tidak valid.' };
+  if (endDate && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return { field: 'endDate', message: 'Tanggal selesai tidak valid.' };
+  if (startDate && endDate && endDate < startDate) return { field: 'endDate', message: 'Tanggal selesai tidak boleh sebelum tanggal mulai.' };
+  return null;
+}
+
+export function getAnalytics(tasks, sessions, courses = [], reference = new Date(), { semester = null, scope = 'all' } = {}) {
+  const useSemester = scope === 'semester' && hasSemesterRange(semester);
+  const scopedTasks = useSemester ? tasks.filter((task) => taskInSemester(task, semester)) : tasks;
+  const scopedSessions = useSemester ? sessions.filter((session) => sessionInSemester(session, semester)) : sessions;
+  const live = visibleTasks(scopedTasks);
   const completed = live.filter((task) => task.completed);
   const withDeadline = completed.filter((task) => task.dueDate && task.completedAt);
   const onTime = withDeadline.filter((task) => task.completedAt <= (dueTimestamp({ ...task, dueTime: task.dueTime || '23:59' }) ?? endOfDay(parseDateString(task.dueDate)).getTime()));
@@ -254,13 +293,14 @@ export function getAnalytics(tasks, sessions, courses = [], reference = new Date
   live.forEach((task) => { const key = getTaskLabel(task, courses) || 'Tanpa kategori'; categoryMap.set(key, (categoryMap.get(key) || 0) + 1); });
   const priority = ['high', 'medium', 'low'].map((key) => ({ label: PRIORITY_LABELS[key], key, count: live.filter((task) => task.priority === key).length })).filter((item) => item.count);
   const types = TASK_TYPES.map((key) => ({ label: TASK_TYPE_LABELS[key], key, count: live.filter((task) => task.type === key).length })).filter((item) => item.count);
-  const focusMinutes = Math.floor(sessions.filter((session) => session.status === 'completed').reduce((sum, session) => sum + session.activeSeconds, 0) / 60);
+  const focusMinutes = Math.floor(scopedSessions.filter((session) => session.status === 'completed').reduce((sum, session) => sum + session.activeSeconds, 0) / 60);
   const days = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(startOfWeek(reference, { weekStartsOn: 1 }), index);
     const key = todayString(date);
-    return { key, label: format(date, 'EEE'), completed: completed.filter((task) => task.completedAt && todayString(new Date(task.completedAt)) === key).length, focus: Math.floor(sessions.filter((session) => session.status === 'completed' && session.endedAt && todayString(new Date(session.endedAt)) === key).reduce((sum, session) => sum + session.activeSeconds, 0) / 60) };
+    return { key, label: format(date, 'EEE'), completed: completed.filter((task) => task.completedAt && todayString(new Date(task.completedAt)) === key).length, focus: Math.floor(scopedSessions.filter((session) => session.status === 'completed' && session.endedAt && todayString(new Date(session.endedAt)) === key).reduce((sum, session) => sum + session.activeSeconds, 0) / 60) };
   });
   return {
+    scope: useSemester ? 'semester' : 'all',
     completionRate: live.length ? Math.round((completed.length / live.length) * 100) : 0,
     completed: completed.length,
     active: live.length - completed.length,
@@ -269,7 +309,7 @@ export function getAnalytics(tasks, sessions, courses = [], reference = new Date
     onTimeCount: onTime.length,
     withDeadline: live.filter((task) => task.dueDate).length,
     focusMinutes,
-    sessionsCompleted: sessions.filter((session) => session.status === 'completed').length,
+    sessionsCompleted: scopedSessions.filter((session) => session.status === 'completed').length,
     category: [...categoryMap.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count })),
     courses: getCourseProgress(courses, live).filter((item) => item.total).map((item) => ({ label: item.course.name, count: item.total, completed: item.completed })),
     types,
