@@ -71,7 +71,26 @@ export function getTaskXp(task) {
   return 10 + (task.priority === 'high' ? 5 : task.priority === 'medium' ? 3 : 0) + typeBonus;
 }
 
-export function getSessionXp(activeSeconds) { return Math.floor(Math.max(0, activeSeconds) / 600); }
+export const FOCUS_AUTO_PAUSE_AFTER_MS = 5 * 60 * 1000;
+export const FOCUS_REWARD_OVERTIME_RATIO = 1.5;
+
+export function getTaskFocusMinutes(task, fallbackMinutes = 25) {
+  const fallback = Math.min(180, Math.max(5, Number(fallbackMinutes) || 25));
+  const estimate = Number(task?.estimateMinutes);
+  return Number.isFinite(estimate) && estimate > 0 ? Math.min(180, Math.max(5, estimate)) : fallback;
+}
+
+export function getRewardableFocusSeconds(activeSeconds, plannedMinutes = null) {
+  const parsedSeconds = Number(activeSeconds);
+  const safeSeconds = Number.isFinite(parsedSeconds) ? Math.max(0, parsedSeconds) : 0;
+  const planned = Number(plannedMinutes);
+  if (!Number.isFinite(planned) || planned <= 0) return safeSeconds;
+  return Math.min(safeSeconds, planned * 60 * FOCUS_REWARD_OVERTIME_RATIO);
+}
+
+export function getSessionXp(activeSeconds, plannedMinutes = null) {
+  return Math.floor(getRewardableFocusSeconds(activeSeconds, plannedMinutes) / 600);
+}
 
 export function getLevel(totalXp) { return Math.floor(Math.max(0, totalXp) / 100) + 1; }
 
@@ -109,6 +128,17 @@ export function getFocusActiveSeconds(focus, at = Date.now()) {
   const runningSince = Number(focus?.runningSince);
   if (focus?.status !== 'focusing' || focus?.runningSince === null || focus?.runningSince === undefined || !Number.isFinite(runningSince) || runningSince <= 0) return Math.floor(activeSeconds);
   return Math.floor(activeSeconds + Math.max(0, (timestampOr(at) - runningSince) / 1000));
+}
+
+export function autoPauseFocus(focus, at = Date.now()) {
+  if (!focus || focus.status !== 'focusing') return focus;
+  const pausedAt = timestampOr(at);
+  return {
+    ...focus,
+    status: 'paused',
+    activeSeconds: getFocusActiveSeconds(focus, pausedAt),
+    runningSince: null
+  };
 }
 
 export function getFocusTimerState(focus, fallbackMinutes = 25, at = Date.now()) {
@@ -635,11 +665,11 @@ export function applyTaskCompletionReward(progress, task) {
   return addMilestones(next, { taskCompleted: true });
 }
 
-export function applySessionReward(progress, activeSeconds) {
+export function applySessionReward(progress, activeSeconds, plannedMinutes = null) {
   const dateKey = todayString();
   let next = updateStreak(progress, dateKey);
   next = awardConsistency(next, dateKey);
-  next = { ...next, totalXp: next.totalXp + getSessionXp(activeSeconds) };
+  next = { ...next, totalXp: next.totalXp + getSessionXp(activeSeconds, plannedMinutes) };
   next.level = getLevel(next.totalXp);
   return addMilestones(next, { sessionCompleted: true });
 }

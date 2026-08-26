@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, CalendarClock, Check, CirclePlay, Clock3, Flame, Gauge, ListChecks, Sparkles, Trophy, Zap } from 'lucide-react';
 import { playHeroSequence } from '../motion/anime.js';
-import { getCountdownLabel, getCourseProgress, getDashboardStats, getDueInfo, getNextLevelXp, getProfileRecommendations, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeTask, selectDailyMission, sortTasks } from '../lib/domain.js';
+import { getCountdownLabel, getCourseProgress, getDashboardStats, getDueInfo, getNextLevelXp, getProfileRecommendations, getTaskFocusMinutes, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeTask, selectDailyMission, sortTasks } from '../lib/domain.js';
 import { CourseDot, EmptyState, Illustration, PageActions, ProgressMeter, StatCard } from '../components/ui.jsx';
 import { TaskRow } from '../components/TaskRow.jsx';
 import { TaskDialog } from '../components/TaskDialog.jsx';
@@ -60,7 +60,7 @@ export function HomePage({ data, commit, toggleTask }) {
         <p className="preview-label">Misi yang sedang kamu pilih</p>
         <h2>{mission ? mission.text : 'Ruang fokusmu siap diisi.'}</h2>
         <div className="preview-meta"><span>{mission ? getDueInfo(mission).label : 'Tambahkan tugas'}</span>{mission?.category && <span>{mission.category}</span>}</div>
-        <div className="preview-focus-row"><div className="preview-timer"><strong>{mission?.estimateMinutes || 25}:00</strong><span>durasi awal</span></div><Illustration type="focus-run" alt="Ilustrasi Focus Run" className="preview-illustration" /></div>
+        <div className="preview-focus-row"><div className="preview-timer"><strong>{getTaskFocusMinutes(mission, data.preferences.focusPreset)}:00</strong><span>durasi awal</span></div><Illustration type="focus-run" alt="Ilustrasi Focus Run" className="preview-illustration" /></div>
         <div className="preview-footer"><span><Zap size={14} />+{mission ? getTaskXp(mission) : 0} XP saat selesai</span><span className="preview-arrow"><ArrowRight size={16} /></span></div>
       </motion.div>
     </motion.section>

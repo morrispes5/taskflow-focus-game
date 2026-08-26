@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.1.2 - Focus Run duration guard
+
+- Durasi awal Focus Run sekarang mengikuti estimasi task (`15`, `25`, `50`, atau `90` menit) dan hanya memakai preset global sebagai fallback.
+- Sesi otomatis dijeda setelah halaman tidak terlihat selama 5 menit, lalu meminta konfirmasi saat pengguna kembali.
+- XP sesi dibatasi sampai 150% dari durasi rencana agar tab yang terlupa terbuka tidak menghasilkan reward berlebihan.
+
 ## 5.1.1 - Focus Run state recovery
 
 - Timer Focus Run beralih ke waktu tambahan setelah target tercapai sehingga sesi running tidak lagi terlihat stuck di `00:00`.

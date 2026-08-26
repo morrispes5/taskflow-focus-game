@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  applyTaskToggle, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel,
-  getProfileRecommendations, getSessionXp, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
+  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, getTaskFocusMinutes,
+  getProfileRecommendations, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
   getSemesterWeek, replaceActiveFocus, resumeDistraction, selectDailyMission, sortTasks, spawnNextOccurrence, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput
 } from './domain.js';
 import { createEmptyAppData } from './storage.js';
@@ -90,6 +90,26 @@ describe('task domain', () => {
   it('mengabaikan runningSince kosong agar timer tidak meloncat ke waktu tak terbatas', () => {
     expect(getFocusActiveSeconds({ status: 'focusing', activeSeconds: 42, runningSince: null }, 175000)).toBe(42);
     expect(getFocusActiveSeconds({ status: 'focusing', activeSeconds: 42, runningSince: 0 }, 175000)).toBe(42);
+  });
+
+  it('menghentikan hitungan wall-clock saat sesi di-auto-pause', () => {
+    const started = createActiveFocus(1, 25, 100000);
+    const paused = autoPauseFocus(started, 400000);
+    expect(paused).toMatchObject({ status: 'paused', activeSeconds: 300, runningSince: null });
+    expect(getFocusActiveSeconds(paused, 999999)).toBe(300);
+  });
+
+  it('memakai estimasi task dan fallback preset untuk durasi Focus Run', () => {
+    expect(getTaskFocusMinutes(task({ estimateMinutes: 15 }), 50)).toBe(15);
+    expect(getTaskFocusMinutes(task({ estimateMinutes: null }), 50)).toBe(50);
+    expect(getTaskFocusMinutes(task({ estimateMinutes: 999 }), 25)).toBe(180);
+  });
+
+  it('membatasi waktu yang menghasilkan XP ketika activeSeconds jauh melebihi rencana', () => {
+    expect(getRewardableFocusSeconds(7200, 25)).toBe(2250);
+    expect(getSessionXp(7200, 25)).toBe(3);
+    expect(getSessionXp(7200)).toBe(12);
+    expect(applySessionReward(createEmptyAppData().progress, 7200, 25).totalXp).toBe(8);
   });
 
   it('mengubah countdown menjadi waktu tambahan setelah target tercapai', () => {
