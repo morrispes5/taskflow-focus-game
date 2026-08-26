@@ -111,6 +111,86 @@ export function getFocusActiveSeconds(focus, at = Date.now()) {
   return Math.floor(activeSeconds + Math.max(0, (timestampOr(at) - runningSince) / 1000));
 }
 
+export function getFocusTimerState(focus, fallbackMinutes = 25, at = Date.now()) {
+  const fallback = Math.min(180, Math.max(5, Number(fallbackMinutes) || 25));
+  const planned = Number(focus?.plannedMinutes);
+  const plannedMinutes = Number.isFinite(planned) ? Math.min(180, Math.max(5, planned)) : fallback;
+  const plannedSeconds = plannedMinutes * 60;
+  const activeSeconds = getFocusActiveSeconds(focus, at);
+  const remainingSeconds = Math.max(0, plannedSeconds - activeSeconds);
+  const overtimeSeconds = Math.max(0, activeSeconds - plannedSeconds);
+  return {
+    activeSeconds,
+    plannedMinutes,
+    plannedSeconds,
+    remainingSeconds,
+    overtimeSeconds,
+    isOvertime: Boolean(focus && focus.status !== 'break' && activeSeconds >= plannedSeconds)
+  };
+}
+
+export function getFocusControlAvailability(focus) {
+  const status = focus?.status;
+  return {
+    canPause: status === 'focusing',
+    canMarkDistraction: status === 'focusing',
+    canFinish: status === 'focusing',
+    canResume: status === 'paused' || status === 'distracted',
+    canAbandon: status === 'paused' || status === 'distracted'
+  };
+}
+
+export function createActiveFocus(taskId, minutes, at = Date.now()) {
+  const startedAt = timestampOr(at);
+  const plannedMinutes = Math.min(180, Math.max(5, Number(minutes) || 25));
+  return {
+    taskId,
+    plannedMinutes,
+    breakMinutes: plannedMinutes >= 50 ? 10 : 5,
+    status: 'focusing',
+    activeSeconds: 0,
+    runningSince: startedAt,
+    sessionStartedAt: startedAt,
+    breakEndsAt: null,
+    distractionStartedAt: null,
+    distractions: []
+  };
+}
+
+export function closeActiveFocusForReplacement(data, at = Date.now()) {
+  const focus = data?.activeFocus;
+  if (!focus) return data;
+  if (focus.status === 'break') return { ...data, activeFocus: null };
+  const endedAt = timestampOr(at);
+  const closedFocus = closeDistraction(focus, endedAt);
+  const activeSeconds = getFocusActiveSeconds(closedFocus, endedAt);
+  const distractionSeconds = getDistractionSummary(closedFocus, endedAt).totalSeconds;
+  const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+  return {
+    ...data,
+    sessions: [...sessions, {
+      id: endedAt,
+      taskId: closedFocus.taskId,
+      plannedMinutes: closedFocus.plannedMinutes,
+      activeSeconds,
+      status: 'abandoned',
+      startedAt: closedFocus.sessionStartedAt,
+      endedAt,
+      rewardApplied: false,
+      note: '',
+      distractions: closedFocus.distractions,
+      distractionSeconds
+    }],
+    activeFocus: null
+  };
+}
+
+export function replaceActiveFocus(data, taskId, minutes, at = Date.now()) {
+  const startedAt = timestampOr(at);
+  const cleared = closeActiveFocusForReplacement(data, startedAt);
+  return { ...cleared, activeFocus: createActiveFocus(taskId, minutes, startedAt) };
+}
+
 export function beginDistraction(focus, at = Date.now()) {
   if (!focus || focus.status !== 'focusing') return focus;
   const startedAt = timestampOr(at);

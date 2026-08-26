@@ -13,7 +13,7 @@ export const NAV_ITEMS = [
   { href: 'index.html', page: 'home', label: 'Beranda', Icon: LayoutDashboard },
   { href: 'tasks.html', page: 'tasks', label: 'Tugas', Icon: ListChecks },
   { href: 'calendar.html', page: 'calendar', label: 'Kalender', Icon: CalendarDays },
-  { href: 'focus.html', page: 'focus', label: 'Fokus', Icon: Target },
+  { href: 'focus.html?intent=choose', page: 'focus', label: 'Fokus', Icon: Target },
   { href: 'analytics.html', page: 'analytics', label: 'Analitik', Icon: BarChart3 },
   { href: 'settings.html', page: 'settings', label: 'Pengaturan', Icon: Settings }
 ];

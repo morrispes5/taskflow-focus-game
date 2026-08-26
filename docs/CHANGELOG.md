@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.1.1 - Focus Run state recovery
+
+- Timer Focus Run beralih ke waktu tambahan setelah target tercapai sehingga sesi running tidak lagi terlihat stuck di `00:00`.
+- Kontrol distraksi dan selesai tetap aktif serta terbaca jelas selama status `focusing` pada tema terang maupun gelap.
+- Semua entry point Focus Run membawa intent eksplisit; sesi atau break lama kini menawarkan pilihan lanjutkan atau mulai sesi baru.
+- Memulai sesi baru menyimpan sesi fokus lama sebagai `abandoned` tanpa reward, sementara break yang sudah tercatat tidak diduplikasi.
+
 ## 5.1.0 - Distraction Tracker (schema v7)
 
 - Focus Desk membedakan jeda sesi dari distraksi yang ditandai manual.

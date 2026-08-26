@@ -237,6 +237,7 @@ textarea.input { min-height: 92px; padding-block: 11px; resize: vertical; }
 .focus-timer.is-paused strong { color: #f3c66c; }
 .focus-timer.is-distracted strong { color: #f3c66c; }
 .focus-timer.is-break strong { color: #6ee2c1; }
+.focus-timer.is-overtime strong { color: #6ee2c1; }
 .focus-progress { height: 6px; overflow: hidden; border-radius: 999px; background: rgba(255, 255, 255, 0.12); }
 .focus-progress span { display: block; height: 100%; border-radius: inherit; background: var(--color-mint); transition: width 800ms linear; }
 .focus-desk, .focus-checklist, .focus-recap { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr); gap: 18px; width: 100%; padding: 19px 0; border-top: 1px solid rgba(255, 255, 255, 0.14); }
@@ -265,6 +266,14 @@ textarea.input { min-height: 92px; padding-block: 11px; resize: vertical; }
 .focus-start-notice { position: fixed; z-index: 80; top: 24px; left: 50%; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: 1px solid rgba(110, 226, 193, 0.34); border-radius: 8px; background: #173f37; color: #fff; box-shadow: var(--shadow-md); font-size: 0.82rem; font-weight: 800; transform: translateX(-50%); }
 @keyframes task-reward-lift { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .focus-controls { grid-column: 1 / -1; }
+.focus-control-group { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; width: 100%; }
+.focus-stage .focus-control-group .btn-ghost { min-height: 44px; border-color: rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.055); color: var(--color-on-ink-soft); }
+.focus-stage .focus-control-group .btn-ghost:hover { border-color: rgba(145, 176, 255, 0.62); background: rgba(145, 176, 255, 0.14); color: var(--color-on-ink); }
+.focus-conflict-target { display: grid; gap: 4px; margin: 18px 0 8px; padding: 14px; border: 1px solid var(--color-line); border-radius: 9px; background: var(--color-surface-muted); }
+.focus-conflict-target span { color: var(--color-cobalt); font-size: 0.68rem; font-weight: 850; letter-spacing: 0.1em; text-transform: uppercase; }
+.focus-conflict-target strong { color: var(--color-ink); }
+.focus-conflict-target small { color: var(--color-muted); line-height: 1.45; }
+.focus-conflict-actions { margin-top: 14px; }
 .focus-reward { display: flex; flex-wrap: wrap; gap: 8px 18px; grid-column: 1 / -1; color: #aab6c5; font-size: 0.78rem; }
 .focus-reward span, .break-note, .completed-note { display: inline-flex; align-items: center; gap: 6px; }
 .focus-task-action { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; grid-column: 1 / -1; padding-top: 8px; }
@@ -426,7 +435,7 @@ textarea.input { min-height: 92px; padding-block: 11px; resize: vertical; }
   .focus-illustration { align-self: center; width: min(50vw, 210px); order: -1; }
   .focus-timer-wrap { width: 100%; }
   .focus-timer strong { font-size: clamp(4rem, 20vw, 7rem); }
-  .focus-controls .btn { flex: 1; }
+  .focus-control-group .btn { flex: 1; }
   .settings-aside, .analytics-columns { grid-template-columns: 1fr; }
   .analytics-note { grid-column: auto; }
   .profile-gate { grid-template-columns: 1fr; gap: 22px; }
@@ -467,8 +476,10 @@ textarea.input { min-height: 92px; padding-block: 11px; resize: vertical; }
   .tour-actions { align-items: stretch; flex-direction: column; }
   .tour-actions > div { width: 100%; }
   .tour-actions > div .btn { flex: 1; }
-  .focus-controls { flex-direction: column; align-items: stretch; }
-  .focus-controls .btn { width: 100%; }
+  .focus-control-group { flex-direction: column; align-items: stretch; }
+  .focus-control-group .btn { width: 100%; }
+  .focus-conflict-actions { flex-direction: column-reverse; }
+  .focus-conflict-actions .btn { width: 100%; }
 }
 
 /* The empty mission needs to invite a first action, not look like a disabled banner. */

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  applyTaskToggle, beginDistraction, closeDistraction, filterTasks, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDistractionSummary, getFocusActiveSeconds, getLevel,
+  applyTaskToggle, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel,
   getProfileRecommendations, getSessionXp, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
-  getSemesterWeek, resumeDistraction, selectDailyMission, sortTasks, spawnNextOccurrence, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput
+  getSemesterWeek, replaceActiveFocus, resumeDistraction, selectDailyMission, sortTasks, spawnNextOccurrence, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput
 } from './domain.js';
 import { createEmptyAppData } from './storage.js';
 
@@ -90,6 +90,44 @@ describe('task domain', () => {
   it('mengabaikan runningSince kosong agar timer tidak meloncat ke waktu tak terbatas', () => {
     expect(getFocusActiveSeconds({ status: 'focusing', activeSeconds: 42, runningSince: null }, 175000)).toBe(42);
     expect(getFocusActiveSeconds({ status: 'focusing', activeSeconds: 42, runningSince: 0 }, 175000)).toBe(42);
+  });
+
+  it('mengubah countdown menjadi waktu tambahan setelah target tercapai', () => {
+    const focus = { status: 'focusing', plannedMinutes: 5, activeSeconds: 300, runningSince: 100000 };
+    expect(getFocusTimerState(focus, 25, 102000)).toMatchObject({
+      activeSeconds: 302,
+      remainingSeconds: 0,
+      overtimeSeconds: 2,
+      isOvertime: true
+    });
+  });
+
+  it('menjaga kontrol distraksi dan selesai aktif selama status focusing', () => {
+    expect(getFocusControlAvailability({ status: 'focusing' })).toMatchObject({
+      canPause: true,
+      canMarkDistraction: true,
+      canFinish: true
+    });
+    expect(getFocusControlAvailability({ status: 'paused' })).toMatchObject({
+      canMarkDistraction: false,
+      canFinish: false,
+      canResume: true
+    });
+  });
+
+  it('mengarsipkan sesi lama sebagai abandoned sebelum memulai task baru', () => {
+    const data = { ...createEmptyAppData(), activeFocus: createActiveFocus(1, 25, 100000) };
+    const next = replaceActiveFocus(data, 2, 50, 115000);
+    expect(next.sessions).toHaveLength(1);
+    expect(next.sessions[0]).toMatchObject({ taskId: 1, activeSeconds: 15, status: 'abandoned', rewardApplied: false });
+    expect(next.activeFocus).toMatchObject({ taskId: 2, plannedMinutes: 50, status: 'focusing', runningSince: 115000 });
+  });
+
+  it('mengganti break tanpa menduplikasi sesi yang sudah selesai', () => {
+    const data = { ...createEmptyAppData(), sessions: [{ id: 8, status: 'completed' }], activeFocus: { taskId: 1, status: 'break', sessionId: 8 } };
+    const cleared = closeActiveFocusForReplacement(data, 120000);
+    expect(cleared.sessions).toEqual(data.sessions);
+    expect(cleared.activeFocus).toBeNull();
   });
 
   it('membawa jejak distraksi ke analitik sesi', () => {

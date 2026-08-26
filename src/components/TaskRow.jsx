@@ -34,7 +34,7 @@ export function TaskRow({ task, courses = [], onToggle, onEdit, onDelete, onPin,
         {sub.total > 0 && <div className="subtask-meter" aria-hidden="true"><span style={{ width: `${Math.round(sub.ratio * 100)}%` }} /></div>}
       </div>
       {!compact && <div className="task-actions">
-        <a className="icon-button" href={`focus.html?taskId=${task.id}`} aria-label={`Mulai fokus: ${task.text}`} title="Mulai Focus Run"><Play size={16} fill="currentColor" /></a>
+        <a className="icon-button" href={`focus.html?intent=start&taskId=${task.id}`} aria-label={`Mulai fokus: ${task.text}`} title="Mulai Focus Run"><Play size={16} fill="currentColor" /></a>
         <button className="icon-button" type="button" onClick={() => onEdit(task)} aria-label={`Edit tugas: ${task.text}`} title="Edit tugas"><Pencil size={16} /></button>
         <details className="task-more">
           <summary className="icon-button" aria-label={`Lainnya: ${task.text}`} title="Lainnya"><MoreHorizontal size={16} /></summary>
