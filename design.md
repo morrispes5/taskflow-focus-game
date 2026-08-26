@@ -1,6 +1,6 @@
 # TaskFlow Design System dan Product Direction
 
-Status: Semester Workspace v6 (schemaVersion 6)
+Status: Semester Workspace v7 (schemaVersion 7)
 Target: ruang kerja semester offline untuk pelajar dan mahasiswa
 Platform: web responsive, mobile-first, PWA
 Bahasa UI: Bahasa Indonesia
@@ -53,7 +53,7 @@ Konsep utama produk adalah **Focus Run**. Setiap tugas dapat menjadi misi yang d
 3. Pengguna memilih `Mulai Focus Run`.
 4. Pengguna memilih preset 25/5, 50/10, atau durasi custom.
 5. Timer masuk ke state fokus.
-6. Pengguna dapat pause, melanjutkan, atau mengakhiri sesi lebih awal.
+6. Pengguna dapat pause, menandai distraksi, melanjutkan, atau mengakhiri sesi lebih awal.
 7. Setelah sesi fokus selesai, tampilkan recap durasi dan tindakan berikutnya.
 8. Pengguna menandai tugas selesai secara manual.
 9. TaskFlow memberi XP, memperbarui streak, dan menampilkan reward singkat.
@@ -63,6 +63,7 @@ Konsep utama produk adalah **Focus Run**. Setiap tugas dapat menjadi misi yang d
 - `ready`: tugas terpilih, timer belum dimulai.
 - `focusing`: timer aktif dan kontrol utama adalah pause atau selesai.
 - `paused`: timer berhenti, pengguna dapat melanjutkan atau mengakhiri sesi.
+- `distracted`: timer dan soundscape berhenti karena pengguna menandai fokusnya beralih; event distraksi sedang dicatat.
 - `break`: sesi fokus selesai dan timer istirahat aktif.
 - `completed`: sesi selesai, recap dan reward terlihat.
 - `abandoned`: sesi dihentikan sebelum selesai; durasi tetap dicatat, tetapi tidak mendapat bonus sesi penuh.
@@ -157,6 +158,7 @@ Elemen utama:
 - Link keluar yang tetap aman dan tidak mudah terpencet.
 - Brief tugas, checklist, link tugas, serta folder materi yang dapat dibuka saat pengguna memang membutuhkannya.
 - Soundscape lokal opsional yang dimulai hanya setelah pengguna menekan Mulai; hening tetap menjadi pilihan sah.
+- `Distraction Tracker` manual yang membedakan jeda terencana dari distraksi, menghentikan timer tanpa menghitung waktu di luar fokus, dan merangkum event di recap.
 - Recap setelah sesi selesai: durasi aktif, status tugas, XP, dan tindakan berikutnya.
 
 ### Analitik
@@ -323,7 +325,9 @@ taskflow_focus_sessions = [
     status: 'completed' | 'abandoned',
     startedAt: Number,
     endedAt: Number | null,
-    rewardApplied: Boolean
+    rewardApplied: Boolean,
+    distractions: [{ id: Number, startedAt: Number, endedAt: Number | null, durationSeconds: Number }],
+    distractionSeconds: Number
   }
 ]
 
@@ -331,11 +335,13 @@ taskflow_focus_active = {
   taskId: Number,
   plannedMinutes: Number,
   breakMinutes: Number,
-  status: 'focusing' | 'paused' | 'break',
+  status: 'focusing' | 'paused' | 'distracted' | 'break',
   activeSeconds: Number,
   runningSince: Number | null,
   sessionStartedAt: Number,
-  breakEndsAt: Number | null
+  breakEndsAt: Number | null,
+  distractionStartedAt: Number | null,
+  distractions: [{ id: Number, startedAt: Number, endedAt: Number | null, durationSeconds: Number }]
 } | null
 ```
 
@@ -409,6 +415,7 @@ Setiap komponen harus memiliki state default, hover, focus-visible, disabled, er
 
 - Tambahkan progress dan focus session storage secara backward-compatible.
 - Buat `focus.html` dan state machine Focus Run.
+- Tambahkan status `distracted` dan histori event distraksi secara backward-compatible.
 - Hubungkan XP, streak, reward, dan recap dengan data nyata.
 
 ### Fase 4: redesign semua halaman

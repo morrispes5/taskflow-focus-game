@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.1.0 - Distraction Tracker (schema v7)
+
+- Focus Desk membedakan jeda sesi dari distraksi yang ditandai manual.
+- Timer dan soundscape berhenti saat distraksi ditandai, lalu melanjutkan sisa waktu ketika pengguna kembali fokus.
+- Recap dan Analitik menampilkan jumlah distraksi serta waktu di luar fokus dari data sesi nyata.
+- Histori distraksi, backup, dan workspace lama dimigrasikan secara additive.
+- Soundscape lo-fi dan hujan memakai empat aset MP3 lokal dengan transisi fade.
+
 ## 5.0.0 - semester workspace v6
 
 - Course dapat menyimpan folder Google Drive/materi secara lokal; Kalender dan Focus Desk menyediakan aksi buka folder.

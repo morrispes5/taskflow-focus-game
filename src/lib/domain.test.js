@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  applyTaskToggle, filterTasks, getAgendaForDay, getCalendarDays, getCountdownLabel, getLevel,
+  applyTaskToggle, beginDistraction, closeDistraction, filterTasks, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDistractionSummary, getFocusActiveSeconds, getLevel,
   getProfileRecommendations, getSessionXp, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
-  getSemesterWeek, selectDailyMission, sortTasks, spawnNextOccurrence, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput
+  getSemesterWeek, resumeDistraction, selectDailyMission, sortTasks, spawnNextOccurrence, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput
 } from './domain.js';
 import { createEmptyAppData } from './storage.js';
 
@@ -71,6 +71,26 @@ describe('task domain', () => {
     expect(getSessionXp(3600)).toBe(6);
     expect(getLevel(0)).toBe(1);
     expect(getLevel(100)).toBe(2);
+  });
+
+  it('mencatat distraksi tanpa menghitung waktunya sebagai fokus aktif', () => {
+    const started = { taskId: 1, plannedMinutes: 50, status: 'focusing', activeSeconds: 0, runningSince: 100000, distractions: [] };
+    const distracted = beginDistraction(started, 115000);
+    expect(getFocusActiveSeconds(distracted, 175000)).toBe(15);
+    expect(distracted.status).toBe('distracted');
+    expect(getDistractionSummary(distracted, 118000)).toEqual({ count: 1, totalSeconds: 3 });
+    const resumed = resumeDistraction(distracted, 118000);
+    expect(resumed.status).toBe('focusing');
+    expect(resumed.runningSince).toBe(118000);
+    expect(getDistractionSummary(resumed, 118000)).toEqual({ count: 1, totalSeconds: 3 });
+    const closed = closeDistraction(distracted, 118000);
+    expect(closed.distractions[0].durationSeconds).toBe(3);
+  });
+
+  it('membawa jejak distraksi ke analitik sesi', () => {
+    const analytics = getAnalytics([task()], [{ id: 8, taskId: 1, plannedMinutes: 25, activeSeconds: 900, status: 'completed', startedAt: 100, endedAt: 200, rewardApplied: true, distractions: [{ id: 150, startedAt: 150, endedAt: 270, durationSeconds: 120 }], distractionSeconds: 120 }]);
+    expect(analytics.distractions).toBe(1);
+    expect(analytics.distractionMinutes).toBe(2);
   });
 
   it('menaikkan streak untuk hari berurutan dan reset setelah jeda', () => {

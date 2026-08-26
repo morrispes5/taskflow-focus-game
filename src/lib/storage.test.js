@@ -1,7 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import {
-  STORAGE_KEYS, createEmptyAppData, createWorkspaceStore, normalizeTask, parseBackupPayload
+  STORAGE_KEYS, createEmptyAppData, createWorkspaceStore, normalizeAppData, normalizeTask, parseBackupPayload
 } from './storage.js';
 
 function createStorage(initial = {}) {
@@ -99,7 +99,7 @@ describe('storage migration', () => {
     expect(() => parseBackupPayload({ version: 2 })).toThrow('Format JSON tidak sesuai.');
   });
 
-  it('memigrasikan workspace v5 ke schema 6 tanpa menghapus data', async () => {
+  it('memigrasikan workspace v6 ke schema 7 tanpa menghapus data', async () => {
     const { store } = createStore();
     const initial = await store.load();
     await store.save({
@@ -109,7 +109,7 @@ describe('storage migration', () => {
       tasks: [{ id: 4, text: 'Tugas lama', completed: false, createdAt: 10, updatedAt: 10, priority: 'high', category: 'Kuliah', estimateMinutes: 50 }]
     });
     const migrated = await store.load();
-    expect(migrated.schemaVersion).toBe(6);
+    expect(migrated.schemaVersion).toBe(7);
     expect(migrated.tasks).toHaveLength(1);
     expect(migrated.tasks[0].text).toBe('Tugas lama');
     expect(migrated.tasks[0].type).toBe('pribadi');
@@ -119,6 +119,22 @@ describe('storage migration', () => {
     expect(migrated.preferences.theme).toBe('system');
     expect(migrated.preferences.focusSoundscape).toBe('none');
     expect(migrated.preferences.focusSoundVolume).toBe(55);
+  });
+
+  it('menormalisasi histori distraksi dan status fokus lama tanpa mereset sesi', () => {
+    const migrated = normalizeAppData({
+      schemaVersion: 6,
+      tasks: [{ id: 4, text: 'Tugas fokus', completed: false, createdAt: 10 }],
+      sessions: [{ id: 30, taskId: 4, plannedMinutes: 50, activeSeconds: 900, status: 'completed', startedAt: 10, endedAt: 100, rewardApplied: true }],
+      activeFocus: { taskId: 4, plannedMinutes: 50, breakMinutes: 10, status: 'distracted', activeSeconds: 900, runningSince: 999, sessionStartedAt: 10, distractionStartedAt: 1000, distractions: [{ id: 1000, startedAt: 1000, endedAt: null }] }
+    });
+    expect(migrated.schemaVersion).toBe(7);
+    expect(migrated.sessions[0].distractions).toEqual([]);
+    expect(migrated.sessions[0].distractionSeconds).toBe(0);
+    expect(migrated.activeFocus.status).toBe('distracted');
+    expect(migrated.activeFocus.runningSince).toBeNull();
+    expect(migrated.activeFocus.distractions[0].startedAt).toBe(1000);
+    expect(migrated.activeFocus.distractions[0].endedAt).toBeNull();
   });
 
   it('menyimpan folder materi dan backup v6', async () => {

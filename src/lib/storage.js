@@ -16,8 +16,8 @@ const DATABASE_VERSION = 1;
 const STORE_NAME = 'workspace';
 const APP_RECORD_KEY = 'app-data';
 
-export const SCHEMA_VERSION = 6;
-export const BACKUP_VERSION = 6;
+export const SCHEMA_VERSION = 7;
+export const BACKUP_VERSION = 7;
 
 export const MAX_TASK_LENGTH = 120;
 export const MAX_CATEGORY_LENGTH = 32;
@@ -27,6 +27,7 @@ export const MAX_COURSES = 24;
 export const MAX_COURSE_NAME = 48;
 export const MAX_COURSE_CODE = 16;
 export const MAX_SESSION_NOTE = 240;
+export const MAX_DISTRACTIONS = 100;
 export const MAX_URL_LENGTH = 300;
 export const PRIORITIES = ['high', 'medium', 'low'];
 export const ESTIMATE_OPTIONS = [15, 25, 50, 90];
@@ -194,6 +195,8 @@ export function normalizeSession(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const status = raw.status === 'completed' || raw.status === 'abandoned' ? raw.status : null;
   if (!status) return null;
+  const distractions = normalizeDistractions(raw.distractions);
+  const derivedDistractionSeconds = distractions.reduce((sum, item) => sum + item.durationSeconds, 0);
   return {
     id: numberOr(raw.id, Date.now()),
     taskId: numberOr(raw.taskId, 0),
@@ -201,9 +204,54 @@ export function normalizeSession(raw) {
     activeSeconds: Math.max(0, numberOr(raw.activeSeconds, 0)),
     status,
     startedAt: numberOr(raw.startedAt, Date.now()),
-    endedAt: Number.isFinite(Number(raw.endedAt)) ? Number(raw.endedAt) : null,
+    endedAt: raw.endedAt !== null && raw.endedAt !== undefined && Number.isFinite(Number(raw.endedAt)) ? Number(raw.endedAt) : null,
     rewardApplied: Boolean(raw.rewardApplied),
-    note: String(raw.note ?? '').trim().slice(0, MAX_SESSION_NOTE)
+    note: String(raw.note ?? '').trim().slice(0, MAX_SESSION_NOTE),
+    distractions,
+    distractionSeconds: Math.max(0, Math.floor(numberOr(raw.distractionSeconds, derivedDistractionSeconds)))
+  };
+}
+
+export function normalizeDistraction(raw, index = 0) {
+  if (!raw || typeof raw !== 'object') return null;
+  const startedAt = numberOr(raw.startedAt, 0);
+  if (!startedAt) return null;
+  const endedAt = raw.endedAt !== null && raw.endedAt !== undefined && Number.isFinite(Number(raw.endedAt)) ? Number(raw.endedAt) : null;
+  const elapsed = endedAt !== null ? Math.max(0, Math.floor((endedAt - startedAt) / 1000)) : 0;
+  return {
+    id: numberOr(raw.id, startedAt + index),
+    startedAt,
+    endedAt,
+    durationSeconds: Math.max(0, Math.floor(numberOr(raw.durationSeconds, elapsed)))
+  };
+}
+
+export function normalizeDistractions(raw) {
+  return Array.isArray(raw) ? raw.map(normalizeDistraction).filter(Boolean).slice(-MAX_DISTRACTIONS) : [];
+}
+
+export function normalizeActiveFocus(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const statuses = ['focusing', 'paused', 'distracted', 'break'];
+  const status = statuses.includes(raw.status) ? raw.status : null;
+  if (!status) return null;
+  const distractions = normalizeDistractions(raw.distractions);
+  const openDistraction = [...distractions].reverse().find((item) => item.endedAt === null);
+  const distractionStartedAt = status === 'distracted'
+    ? (raw.distractionStartedAt !== null && raw.distractionStartedAt !== undefined && Number.isFinite(Number(raw.distractionStartedAt)) ? Number(raw.distractionStartedAt) : openDistraction?.startedAt || null)
+    : null;
+  return {
+    taskId: numberOr(raw.taskId, 0),
+    plannedMinutes: Math.max(1, numberOr(raw.plannedMinutes, 25)),
+    breakMinutes: Math.max(1, numberOr(raw.breakMinutes, 5)),
+    status,
+    activeSeconds: Math.max(0, Math.floor(numberOr(raw.activeSeconds, 0))),
+    runningSince: status === 'focusing' && raw.runningSince !== null && raw.runningSince !== undefined && Number.isFinite(Number(raw.runningSince)) ? Number(raw.runningSince) : null,
+    sessionStartedAt: numberOr(raw.sessionStartedAt, Date.now()),
+    breakEndsAt: raw.breakEndsAt !== null && raw.breakEndsAt !== undefined && Number.isFinite(Number(raw.breakEndsAt)) ? Number(raw.breakEndsAt) : null,
+    sessionId: raw.sessionId !== null && raw.sessionId !== undefined && Number.isFinite(Number(raw.sessionId)) ? Number(raw.sessionId) : null,
+    distractionStartedAt,
+    distractions
   };
 }
 
@@ -254,7 +302,7 @@ export function normalizeAppData(raw) {
     onboarding: normalizeOnboarding(source.onboarding),
     progress: normalizeProgress(source.progress),
     sessions: Array.isArray(source.sessions) ? source.sessions.map(normalizeSession).filter(Boolean) : [],
-    activeFocus: source.activeFocus && typeof source.activeFocus === 'object' ? source.activeFocus : null,
+    activeFocus: normalizeActiveFocus(source.activeFocus),
     preferences: normalizePreferences(source.preferences)
   };
 }

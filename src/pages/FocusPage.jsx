@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ArrowLeft, ArrowRight, Check, CirclePlay, ExternalLink, FolderOpen, ListTodo, Pause, Play, Trophy, Volume2, VolumeX, Zap } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, CirclePlay, EyeOff, ExternalLink, FolderOpen, ListTodo, Pause, Play, Trophy, Volume2, VolumeX, Zap } from 'lucide-react';
 import { playNumberSequence, playRewardSequence } from '../motion/anime.js';
-import { applySessionReward, getDueInfo, getSemesterWeek, getSessionXp, getSubtaskProgress, selectDailyMission } from '../lib/domain.js';
+import { applySessionReward, beginDistraction, closeDistraction, getDistractionSummary, getDueInfo, getFocusActiveSeconds, getSemesterWeek, getSessionXp, getSubtaskProgress, resumeDistraction, selectDailyMission } from '../lib/domain.js';
 import { FOCUS_SOUNDSCAPES, FOCUS_SOUNDSCAPE_LABELS } from '../lib/storage.js';
 import { playFeedbackTone, startFocusSoundscape, stopFocusSoundscape } from '../lib/audio.js';
 import { EmptyState, Illustration } from '../components/ui.jsx';
@@ -49,15 +49,24 @@ export function FocusPage({ data, commit, toggleTask }) {
   }, [now, data.activeFocus, commit]);
 
   const focus = data.activeFocus;
-  const liveSeconds = focus?.status === 'focusing' && focus.runningSince ? focus.activeSeconds + Math.floor((now - focus.runningSince) / 1000) : focus?.activeSeconds || 0;
+  const liveSeconds = getFocusActiveSeconds(focus, now);
   const plannedSeconds = (focus?.plannedMinutes || data.preferences.focusPreset || 25) * 60;
   const remainingSeconds = Math.max(0, plannedSeconds - liveSeconds);
   const isReady = !focus && Boolean(task);
   const isFocusing = focus?.status === 'focusing';
   const isPaused = focus?.status === 'paused';
+  const isDistracted = focus?.status === 'distracted';
   const isBreak = focus?.status === 'break';
   const completion = plannedSeconds ? Math.min(100, Math.round((liveSeconds / plannedSeconds) * 100)) : 0;
   const subtaskProgress = getSubtaskProgress(task || { subtasks: [] });
+  const distractionSummary = getDistractionSummary(focus, now);
+  const distractionMessage = isDistracted
+    ? 'Timer dan soundscape berhenti. Waktu di luar fokus akan dicatat sampai kamu kembali.'
+    : isPaused
+      ? 'Jeda sesi sedang aktif. Jeda terencana tidak masuk hitungan distraksi.'
+      : isBreak
+        ? 'Ringkasan ini menyimpan momen ketika fokusmu sempat beralih.'
+        : 'Tekan Tandai distraksi saat sadar fokusmu sempat beralih. Jeda sesi tetap tersedia untuk istirahat yang disengaja.';
   const semesterWeek = getSemesterWeek(task?.dueDate, data.semester);
   const soundEnabled = Boolean(data.preferences.sound && data.preferences.focusSoundscape !== 'none' && data.preferences.focusSoundVolume > 0);
 
@@ -73,7 +82,7 @@ export function FocusPage({ data, commit, toggleTask }) {
     if (!task) return;
     const start = Date.now();
     const planned = Math.min(180, Math.max(5, Number(minutes) || 25));
-    commit((current) => ({ ...current, preferences: { ...current.preferences, customFocusMinutes: planned }, activeFocus: { taskId: task.id, plannedMinutes: planned, breakMinutes: planned >= 50 ? 10 : 5, status: 'focusing', activeSeconds: 0, runningSince: start, sessionStartedAt: start, breakEndsAt: null } }), 'Fokus dimulai.');
+    commit((current) => ({ ...current, preferences: { ...current.preferences, customFocusMinutes: planned }, activeFocus: { taskId: task.id, plannedMinutes: planned, breakMinutes: planned >= 50 ? 10 : 5, status: 'focusing', activeSeconds: 0, runningSince: start, sessionStartedAt: start, breakEndsAt: null, distractionStartedAt: null, distractions: [] } }), 'Fokus dimulai.');
     startSound();
     feedback('focusStart');
     showFocusNotice();
@@ -84,12 +93,27 @@ export function FocusPage({ data, commit, toggleTask }) {
     commit((current) => {
       const currentFocus = current.activeFocus;
       if (!currentFocus) return current;
-      const elapsed = currentFocus.activeSeconds + Math.floor((Date.now() - currentFocus.runningSince) / 1000);
+      const elapsed = getFocusActiveSeconds(currentFocus, Date.now());
       return { ...current, activeFocus: { ...currentFocus, status: 'paused', activeSeconds: elapsed, runningSince: null } };
     }, 'Sesi dijeda.');
   };
   const resumeFocus = () => {
-    commit((current) => ({ ...current, activeFocus: { ...current.activeFocus, status: 'focusing', runningSince: Date.now() } }), 'Fokus dilanjutkan.');
+    const resumedAt = Date.now();
+    commit((current) => ({ ...current, activeFocus: current.activeFocus?.status === 'distracted' ? resumeDistraction(current.activeFocus, resumedAt) : { ...current.activeFocus, status: 'focusing', runningSince: resumedAt } }), 'Fokus dilanjutkan.');
+    startSound();
+    feedback('resume');
+  };
+  const markDistraction = () => {
+    if (!isFocusing) return;
+    const distractedAt = Date.now();
+    stopFocusSoundscape();
+    feedback('pause');
+    commit((current) => ({ ...current, activeFocus: beginDistraction(current.activeFocus, distractedAt) }), 'Distraksi tercatat.');
+  };
+  const resumeFromDistraction = () => {
+    if (!isDistracted) return;
+    const resumedAt = Date.now();
+    commit((current) => ({ ...current, activeFocus: resumeDistraction(current.activeFocus, resumedAt) }), 'Kembali fokus.');
     startSound();
     feedback('resume');
   };
@@ -100,10 +124,12 @@ export function FocusPage({ data, commit, toggleTask }) {
     commit((current) => {
       const currentFocus = current.activeFocus;
       if (!currentFocus) return current;
-      const activeSeconds = currentFocus.activeSeconds + (currentFocus.runningSince ? Math.floor((ended - currentFocus.runningSince) / 1000) : 0);
-      const session = { id: ended, taskId: currentFocus.taskId, plannedMinutes: currentFocus.plannedMinutes, activeSeconds, status: 'completed', startedAt: currentFocus.sessionStartedAt, endedAt: ended, rewardApplied: true, note: '' };
+      const closedFocus = closeDistraction(currentFocus, ended);
+      const activeSeconds = getFocusActiveSeconds(closedFocus, ended);
+      const distractionSeconds = getDistractionSummary(closedFocus, ended).totalSeconds;
+      const session = { id: ended, taskId: closedFocus.taskId, plannedMinutes: closedFocus.plannedMinutes, activeSeconds, status: 'completed', startedAt: closedFocus.sessionStartedAt, endedAt: ended, rewardApplied: true, note: '', distractions: closedFocus.distractions, distractionSeconds };
       const progress = applySessionReward(current.progress, activeSeconds);
-      return { ...current, progress, sessions: [...current.sessions, session], activeFocus: { ...currentFocus, status: 'break', activeSeconds, runningSince: null, breakEndsAt: ended + currentFocus.breakMinutes * 60000, sessionId: ended } };
+      return { ...current, progress, sessions: [...current.sessions, session], activeFocus: { ...closedFocus, status: 'break', activeSeconds, runningSince: null, breakEndsAt: ended + closedFocus.breakMinutes * 60000, sessionId: ended } };
     }, 'Sesi selesai. Reward XP masuk.');
     if (data.preferences.notify) sendNotification('Focus Run selesai', task ? `Sesi untuk “${task.text}” sudah berakhir.` : 'Sesi fokus selesai.');
     requestAnimationFrame(() => { playRewardSequence(rewardRef.current, reduced); playNumberSequence(rewardRef.current, reduced); });
@@ -114,8 +140,10 @@ export function FocusPage({ data, commit, toggleTask }) {
       const currentFocus = current.activeFocus;
       if (!currentFocus) return current;
       const ended = Date.now();
-      const activeSeconds = currentFocus.activeSeconds + (currentFocus.runningSince ? Math.floor((ended - currentFocus.runningSince) / 1000) : 0);
-      return { ...current, sessions: [...current.sessions, { id: ended, taskId: currentFocus.taskId, plannedMinutes: currentFocus.plannedMinutes, activeSeconds, status: 'abandoned', startedAt: currentFocus.sessionStartedAt, endedAt: ended, rewardApplied: false, note: '' }], activeFocus: null };
+       const closedFocus = closeDistraction(currentFocus, ended);
+       const activeSeconds = getFocusActiveSeconds(closedFocus, ended);
+       const distractionSeconds = getDistractionSummary(closedFocus, ended).totalSeconds;
+       return { ...current, sessions: [...current.sessions, { id: ended, taskId: closedFocus.taskId, plannedMinutes: closedFocus.plannedMinutes, activeSeconds, status: 'abandoned', startedAt: closedFocus.sessionStartedAt, endedAt: ended, rewardApplied: false, note: '', distractions: closedFocus.distractions, distractionSeconds }], activeFocus: null };
     }, 'Sesi diakhiri tanpa reward.');
   };
   const clearBreak = () => commit((current) => {
@@ -137,15 +165,16 @@ export function FocusPage({ data, commit, toggleTask }) {
 
   return <div className="focus-page">
     <div className="focus-topbar"><a className="focus-back" href="index.html"><ArrowLeft size={17} />Kembali ke Beranda</a><span className="focus-brand"><span className="brand-mark brand-mark-small" aria-hidden="true"><span /></span>TaskFlow Focus Run</span><span className="focus-date">{formatFocusDate(new Date())}</span></div>
-    {task ? <motion.section className={`focus-stage ${isFocusing ? 'focus-stage-active' : ''}`} initial={{ opacity: 0, y: reduced ? 0 : 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.42, ease: 'easeOut' }}>
-      <div className="focus-stage-copy"><p className="eyebrow">{isBreak ? 'Recap sesi' : isPaused ? 'Sesi dijeda' : isFocusing ? 'Sedang fokus' : 'Meja kerja tugas'}</p><h1>{isBreak ? 'Satu langkah selesai. Ambil jeda yang layak.' : task.text}</h1><div className="focus-task-meta"><span className={`priority-badge priority-${task.priority}`}>{task.priority === 'high' ? 'Tinggi' : task.priority === 'medium' ? 'Sedang' : 'Rendah'}</span><span>{course?.name || task.category || 'Tanpa kategori'}</span><span>{getDueInfo(task).label}</span>{semesterWeek && <span>Minggu ke-{semesterWeek}</span>}</div></div>
+    {task ? <motion.section className={`focus-stage ${isFocusing || isDistracted ? 'focus-stage-active' : ''}`} initial={{ opacity: 0, y: reduced ? 0 : 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.42, ease: 'easeOut' }}>
+      <div className="focus-stage-copy"><p className="eyebrow">{isBreak ? 'Recap sesi' : isDistracted ? 'Distraksi aktif' : isPaused ? 'Sesi dijeda' : isFocusing ? 'Sedang fokus' : 'Meja kerja tugas'}</p><h1>{isBreak ? 'Satu langkah selesai. Ambil jeda yang layak.' : task.text}</h1><div className="focus-task-meta"><span className={`priority-badge priority-${task.priority}`}>{task.priority === 'high' ? 'Tinggi' : task.priority === 'medium' ? 'Sedang' : 'Rendah'}</span><span>{course?.name || task.category || 'Tanpa kategori'}</span><span>{getDueInfo(task).label}</span>{semesterWeek && <span>Minggu ke-{semesterWeek}</span>}</div></div>
       <Illustration type={isBreak ? 'milestone' : 'focus-run'} alt="Ilustrasi Focus Run" className="focus-illustration" />
-      <div className="focus-timer-wrap"><div className={`focus-timer ${isPaused ? 'is-paused' : ''} ${isBreak ? 'is-break' : ''}`}><AnimatePresence mode="wait"><motion.span key={isBreak ? 'break' : isPaused ? 'paused' : isFocusing ? 'focusing' : 'ready'} className="timer-status" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}>{isBreak ? 'Waktu istirahat' : isPaused ? 'Dijeda' : isFocusing ? 'Fokus sekarang' : 'Siap dimulai'}</motion.span></AnimatePresence><strong>{isBreak ? formatTimer(Math.max(0, Math.ceil((focus.breakEndsAt - now) / 1000))) : formatTimer(isReady ? plannedSeconds : remainingSeconds)}</strong><span className="timer-subtitle">{isBreak ? 'Kamu bisa kembali kapan saja.' : `${focus?.plannedMinutes || data.preferences.focusPreset || 25} menit sesi fokus`}</span></div><div className="focus-progress"><motion.span animate={{ width: `${isBreak ? 100 : completion}%` }} transition={{ duration: reduced ? 0.12 : 0.42, ease: 'easeOut' }} /></div></div>
+      <div className="focus-timer-wrap"><div className={`focus-timer ${isPaused ? 'is-paused' : ''} ${isDistracted ? 'is-distracted' : ''} ${isBreak ? 'is-break' : ''}`}><AnimatePresence mode="wait"><motion.span key={isBreak ? 'break' : isDistracted ? 'distracted' : isPaused ? 'paused' : isFocusing ? 'focusing' : 'ready'} className="timer-status" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}>{isBreak ? 'Waktu istirahat' : isDistracted ? 'Distraksi aktif' : isPaused ? 'Dijeda' : isFocusing ? 'Fokus sekarang' : 'Siap dimulai'}</motion.span></AnimatePresence><strong>{isBreak ? formatTimer(Math.max(0, Math.ceil((focus.breakEndsAt - now) / 1000))) : formatTimer(isReady ? plannedSeconds : remainingSeconds)}</strong><span className="timer-subtitle">{isBreak ? 'Kamu bisa kembali kapan saja.' : isDistracted ? 'Timer berhenti sementara.' : `${focus?.plannedMinutes || data.preferences.focusPreset || 25} menit sesi fokus`}</span></div><div className="focus-progress"><motion.span animate={{ width: `${isBreak ? 100 : completion}%` }} transition={{ duration: reduced ? 0.12 : 0.42, ease: 'easeOut' }} /></div></div>
+      {focus && <section className={`focus-distraction ${isDistracted ? 'is-active' : ''}`} aria-label="Pelacak distraksi"><div className="focus-distraction-copy"><div className="focus-desk-heading"><EyeOff size={18} /><div><p className="section-kicker">Distraction Tracker</p><h2>{isDistracted ? 'Tidak apa-apa. Kembali saat siap.' : distractionSummary.count ? `${distractionSummary.count} distraksi tercatat` : 'Fokusmu masih utuh.'}</h2></div></div><p>{distractionMessage}</p></div><div className="focus-distraction-stats"><span><strong>{distractionSummary.count}</strong> kali</span><span><strong>{formatTimer(distractionSummary.totalSeconds)}</strong> di luar fokus</span></div></section>}
       <section className="focus-desk" aria-label="Meja kerja tugas"><div className="focus-brief"><div className="focus-desk-heading"><ListTodo size={18} /><div><p className="section-kicker">Brief tugas</p><h2>Semua yang kamu butuhkan, tetap dekat.</h2></div></div>{task.notes ? <p>{task.notes}</p> : <p className="muted-light">Belum ada catatan. Tambahkan instruksi atau rubrik dari halaman Tugas bila diperlukan.</p>}<div className="focus-resource-links">{course?.driveUrl && <a className="focus-resource" href={course.driveUrl} target="_blank" rel="noreferrer"><FolderOpen size={16} />Buka folder materi <ExternalLink size={13} /></a>}{task.url && <a className="focus-resource" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={16} />Buka link tugas <ExternalLink size={13} /></a>}</div></div><div className="focus-sound-panel"><div className="focus-desk-heading"><Volume2 size={18} /><div><p className="section-kicker">Soundscape lokal</p><h2>{soundEnabled ? FOCUS_SOUNDSCAPE_LABELS[data.preferences.focusSoundscape] : 'Hening'}</h2></div></div><div className="soundscape-options" role="group" aria-label="Pilih soundscape">{FOCUS_SOUNDSCAPES.map((soundscape) => <button key={soundscape} className={data.preferences.focusSoundscape === soundscape ? 'active' : ''} type="button" onClick={() => setSoundscape(soundscape)} aria-pressed={data.preferences.focusSoundscape === soundscape}>{soundscape === 'none' ? <VolumeX size={14} /> : <Volume2 size={14} />}{FOCUS_SOUNDSCAPE_LABELS[soundscape]}</button>)}</div><p>{data.preferences.sound ? `Volume ${data.preferences.focusSoundVolume}%. Suara hanya mulai setelah tombol Mulai ditekan.` : 'Bunyi dinonaktifkan dari Pengaturan.'}</p></div></section>
       {isReady && <form className="custom-focus" onSubmit={(event) => { event.preventDefault(); startFocus(customMinutes); }}><label htmlFor="custom-focus">Durasi custom (5-180 menit)</label><input id="custom-focus" className="input" type="number" min="5" max="180" value={customMinutes} onChange={(event) => setCustomMinutes(event.target.value)} /><button className="btn btn-secondary" type="submit">Mulai custom</button></form>}
       {task.subtasks?.length > 0 && <section className="focus-checklist"><div><p className="section-kicker">Checklist</p><h2>{subtaskProgress.done}/{subtaskProgress.total} langkah selesai</h2></div><div className="focus-progress"><motion.span animate={{ width: `${Math.round(subtaskProgress.ratio * 100)}%` }} transition={{ duration: reduced ? 0.12 : 0.28 }} /></div><ul className="focus-subtasks">{task.subtasks.map((item) => <motion.li key={item.id} layout><label><input type="checkbox" checked={item.completed} onChange={() => toggleSubtask(item.id)} /><span>{item.text}</span></label></motion.li>)}</ul></section>}
-      <div className="focus-controls"><AnimatePresence mode="wait">{isReady && <motion.div key="ready" className="focus-controls" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><button className="btn btn-dark btn-large" type="button" onClick={() => startFocus(data.preferences.focusPreset)}><CirclePlay size={19} fill="currentColor" />Mulai {data.preferences.focusPreset} menit</button><button className="btn btn-ghost" type="button" onClick={() => startFocus(50)}>Mulai 50 menit</button></motion.div>}{isFocusing && <motion.div key="focusing" className="focus-controls" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><button className="btn btn-dark btn-large" type="button" onClick={pauseFocus}><Pause size={19} />Jeda sesi</button><button className="btn btn-ghost" type="button" onClick={finishFocus}>Selesaikan sesi</button></motion.div>}{isPaused && <motion.div key="paused" className="focus-controls" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><button className="btn btn-dark btn-large" type="button" onClick={resumeFocus}><Play size={18} fill="currentColor" />Lanjutkan</button><button className="btn btn-ghost" type="button" onClick={abandonFocus}>Akhiri sesi</button></motion.div>}{isBreak && <motion.div key="break" className="focus-controls" initial={{ opacity: 0, y: reduced ? 0 : 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><button className="btn btn-dark btn-large" type="button" onClick={clearBreak}><Check size={18} />Simpan recap</button><span className="break-note">Sesi memberi +{getSessionXp(liveSeconds)} XP</span></motion.div>}</AnimatePresence></div>
-      <AnimatePresence>{isBreak && <motion.section className="focus-recap" initial={{ opacity: 0, y: reduced ? 0 : 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.28 }}><p className="section-kicker">Recap selesai</p><h2>{formatTimer(liveSeconds)} aktif, +{getSessionXp(liveSeconds)} XP</h2><p>{subtaskProgress.total ? `${subtaskProgress.done} dari ${subtaskProgress.total} checklist selesai.` : 'Tidak ada checklist pada tugas ini.'}</p><label className="field-group session-note"><span>Catatan sesi <span className="label-hint">opsional</span></span><textarea className="input" maxLength={240} value={sessionNote} onChange={(event) => setSessionNote(event.target.value)} placeholder="Apa yang sempat kamu selesaikan?" /></label></motion.section>}</AnimatePresence>
+      <div className="focus-controls"><AnimatePresence mode="wait">{isReady && <motion.div key="ready" className="focus-controls" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><button className="btn btn-dark btn-large" type="button" onClick={() => startFocus(data.preferences.focusPreset)}><CirclePlay size={19} fill="currentColor" />Mulai {data.preferences.focusPreset} menit</button><button className="btn btn-ghost" type="button" onClick={() => startFocus(50)}>Mulai 50 menit</button></motion.div>}{isFocusing && <motion.div key="focusing" className="focus-controls" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><button className="btn btn-dark btn-large" type="button" onClick={pauseFocus}><Pause size={19} />Jeda sesi</button><button className="btn btn-ghost" type="button" onClick={markDistraction}><EyeOff size={18} />Tandai distraksi</button><button className="btn btn-ghost" type="button" onClick={finishFocus}>Selesaikan sesi</button></motion.div>}{isDistracted && <motion.div key="distracted" className="focus-controls" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><button className="btn btn-dark btn-large" type="button" onClick={resumeFromDistraction}><Play size={18} fill="currentColor" />Kembali fokus</button><button className="btn btn-ghost" type="button" onClick={abandonFocus}>Akhiri sesi</button></motion.div>}{isPaused && <motion.div key="paused" className="focus-controls" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><button className="btn btn-dark btn-large" type="button" onClick={resumeFocus}><Play size={18} fill="currentColor" />Lanjutkan</button><button className="btn btn-ghost" type="button" onClick={abandonFocus}>Akhiri sesi</button></motion.div>}{isBreak && <motion.div key="break" className="focus-controls" initial={{ opacity: 0, y: reduced ? 0 : 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}><button className="btn btn-dark btn-large" type="button" onClick={clearBreak}><Check size={18} />Simpan recap</button><span className="break-note">Sesi memberi +{getSessionXp(liveSeconds)} XP</span></motion.div>}</AnimatePresence></div>
+      <AnimatePresence>{isBreak && <motion.section className="focus-recap" initial={{ opacity: 0, y: reduced ? 0 : 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.28 }}><p className="section-kicker">Recap selesai</p><h2>{formatTimer(liveSeconds)} aktif, +{getSessionXp(liveSeconds)} XP</h2><p>{subtaskProgress.total ? `${subtaskProgress.done} dari ${subtaskProgress.total} checklist selesai.` : 'Tidak ada checklist pada tugas ini.'}</p><p>{distractionSummary.count ? `${distractionSummary.count} distraksi · ${formatTimer(distractionSummary.totalSeconds)} di luar fokus.` : 'Tidak ada distraksi tercatat.'}</p><label className="field-group session-note"><span>Catatan sesi <span className="label-hint">opsional</span></span><textarea className="input" maxLength={240} value={sessionNote} onChange={(event) => setSessionNote(event.target.value)} placeholder="Apa yang sempat kamu selesaikan?" /></label></motion.section>}</AnimatePresence>
       <div ref={rewardRef} className="focus-reward"><span><Zap size={15} />+{isBreak ? getSessionXp(liveSeconds) : 0} XP sesi</span><span><Trophy size={15} />{data.progress.totalXp} XP total</span></div>
       <div className="focus-task-action">{!task.completed ? <button className="text-link" type="button" onClick={() => toggleTask(task.id)}><Check size={15} />Tandai tugas selesai</button> : <span className="completed-note"><Check size={15} />Tugas ini sudah selesai</span>}<a className="text-link" href="tasks.html">Pilih misi lain <ArrowRight size={15} /></a></div>
     </motion.section> : <EmptyState type="empty-task" title="Belum ada misi untuk difokuskan" message="Tambahkan tugas terlebih dahulu, lalu kembali untuk menjalankan Focus Run." action="Buka Tugas" onAction={() => { window.location.href = 'tasks.html'; }} />}

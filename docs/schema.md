@@ -1,6 +1,6 @@
 # TaskFlow data schema
 
-`schemaVersion` saat ini: **6**
+`schemaVersion` saat ini: **7**
 IndexedDB: `taskflow_workspace` / object store `workspace` / record key `app-data`  
 Object store version tetap `1`. Yang berubah hanya isi record.
 
@@ -8,7 +8,7 @@ Object store version tetap `1`. Yang berubah hanya isi record.
 
 ```js
 {
-  schemaVersion: 6,
+  schemaVersion: 7,
   tasks: Task[],
   courses: Course[],
   semester: { name: string, startDate: string | null, endDate: string | null } | null,
@@ -61,7 +61,32 @@ Menghapus mata kuliah **tidak** menghapus tugas; `courseId` di-null-kan.
 | `focusSoundscape` | `none` \| `lofi` \| `rain` \| `noise` | `none` |
 | `focusSoundVolume` | angka `0`-`100` | `55` |
 
-Soundscape dibuat dengan Web Audio lokal dan hanya dimulai setelah pengguna menekan Mulai Focus Run. Tidak dipulihkan otomatis setelah refresh.
+Soundscape lo-fi dan hujan memakai aset MP3 lokal; White noise tetap dibuat dengan Web Audio. Soundscape hanya dimulai setelah pengguna menekan Mulai Focus Run dan tidak dipulihkan otomatis setelah refresh.
+
+## Focus session dan Distraction Tracker
+
+Sesi fokus lama tetap valid. Field baru bersifat additive:
+
+```js
+Session = {
+  id, taskId, plannedMinutes, activeSeconds,
+  status: 'completed' | 'abandoned',
+  startedAt, endedAt, rewardApplied, note,
+  distractions: Distraction[],
+  distractionSeconds: number
+}
+
+Distraction = {
+  id: number,
+  startedAt: number,
+  endedAt: number | null,
+  durationSeconds: number
+}
+```
+
+`activeFocus.status` menerima `focusing`, `paused`, `distracted`, atau `break`. Ketika status `distracted`, `activeSeconds` dan timer berhenti; `distractionStartedAt` menyimpan event yang sedang terbuka. Jeda sesi tidak dihitung sebagai distraksi.
+
+Tracker ini manual. TaskFlow tidak mendeteksi atau membaca aplikasi/tab lain, dan waktu distraksi tidak dihitung sebagai waktu fokus aktif.
 
 ## Minggu semester
 
@@ -75,8 +100,8 @@ Tugas masuk semester jika `dueDate` (atau `completedAt` / `createdAt` jika tidak
 
 ## Backup
 
-`createBackup()` menulis `version: 6` plus `courses`, `semester`, dan preferensi soundscape.
-`parseBackupPayload()` menerima array tugas mentah (legacy), backup v4, v5, dan v6.
+`createBackup()` menulis `version: 7` plus `courses`, `semester`, preferensi soundscape, dan histori distraksi sesi.
+`parseBackupPayload()` menerima array tugas mentah (legacy), backup v4, v5, v6, dan v7.
 
 ## Migrasi
 

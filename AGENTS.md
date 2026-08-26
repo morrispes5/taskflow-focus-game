@@ -42,11 +42,11 @@ Halaman baru: buat `nama.html` dengan `data-page`, daftarkan di `vite.config.js`
 
 ## Data
 
-IndexedDB `taskflow_workspace` / store `workspace` / key `app-data`. Versi object store tetap `1`. Versi aplikasi ada di `schemaVersion` (sekarang **6**).
+IndexedDB `taskflow_workspace` / store `workspace` / key `app-data`. Versi object store tetap `1`. Versi aplikasi ada di `schemaVersion` (sekarang **7**).
 
-`normalizeAppData()` selalu mengeluarkan bentuk v6. Record lama tanpa `courses`, `Course.driveUrl`, atau preferensi soundscape diisi default, **bukan** di-reset.
+`normalizeAppData()` selalu mengeluarkan bentuk v7. Record lama tanpa `courses`, `Course.driveUrl`, preferensi soundscape, atau histori distraksi diisi default, **bukan** di-reset.
 
-Backup JSON versi 4/v5 tetap bisa diimport. Backup baru memakai `version: 6`.
+Backup JSON versi 4/v5/v6 tetap bisa diimport. Backup baru memakai `version: 7`.
 
 ## Perintah
 
@@ -60,7 +60,8 @@ PowerShell di mesin ini bisa memblokir `npm.ps1`. Pakai `cmd /c "npm test"` jika
 
 ## Tes yang wajib hijau
 
-- Migrasi workspace v5 → v6 tidak menghapus teks, tugas, course, atau sesi.
+- Migrasi workspace v6 → v7 tidak menghapus teks, tugas, course, sesi, atau histori fokus yang sudah ada.
+- Distraction Tracker membedakan status `distracted` dari `paused`; waktu distraksi tidak masuk `activeSeconds`.
 - Validasi URL folder materi dan label minggu semester.
 - Soundscape tidak autoplay dan tidak berbunyi ketika preference bunyi mati.
 - Recurrence weekly membuat salinan `dueDate + 7` dan mengarsipkan yang lama.

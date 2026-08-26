@@ -99,6 +99,69 @@ export function getSubtaskProgress(task) {
   return { total, done, ratio: done / total };
 }
 
+function timestampOr(value, fallback = Date.now()) {
+  const timestamp = Number(value);
+  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : fallback;
+}
+
+export function getFocusActiveSeconds(focus, at = Date.now()) {
+  const activeSeconds = Math.max(0, Number(focus?.activeSeconds) || 0);
+  if (focus?.status !== 'focusing' || !Number.isFinite(Number(focus.runningSince))) return Math.floor(activeSeconds);
+  return Math.floor(activeSeconds + Math.max(0, (timestampOr(at) - Number(focus.runningSince)) / 1000));
+}
+
+export function beginDistraction(focus, at = Date.now()) {
+  if (!focus || focus.status !== 'focusing') return focus;
+  const startedAt = timestampOr(at);
+  const distractions = Array.isArray(focus.distractions) ? focus.distractions : [];
+  return {
+    ...focus,
+    status: 'distracted',
+    activeSeconds: getFocusActiveSeconds(focus, startedAt),
+    runningSince: null,
+    distractionStartedAt: startedAt,
+    distractions: [...distractions, { id: startedAt, startedAt, endedAt: null, durationSeconds: 0 }]
+  };
+}
+
+export function closeDistraction(focus, at = Date.now()) {
+  if (!focus || focus.status !== 'distracted') return focus;
+  const endedAt = timestampOr(at);
+  const distractions = Array.isArray(focus.distractions) ? [...focus.distractions] : [];
+  let openIndex = -1;
+  for (let index = distractions.length - 1; index >= 0; index -= 1) {
+    if (distractions[index].endedAt === null) {
+      openIndex = index;
+      break;
+    }
+  }
+  const startedAt = timestampOr(focus.distractionStartedAt, openIndex >= 0 ? distractions[openIndex].startedAt : endedAt);
+  const durationSeconds = Math.max(0, Math.floor((endedAt - startedAt) / 1000));
+  if (openIndex >= 0) {
+    distractions[openIndex] = { ...distractions[openIndex], endedAt, durationSeconds };
+  } else {
+    distractions.push({ id: startedAt, startedAt, endedAt, durationSeconds });
+  }
+  return { ...focus, distractionStartedAt: null, distractions };
+}
+
+export function resumeDistraction(focus, at = Date.now()) {
+  if (!focus || focus.status !== 'distracted') return focus;
+  const runningSince = timestampOr(at);
+  return { ...closeDistraction(focus, runningSince), status: 'focusing', runningSince };
+}
+
+export function getDistractionSummary(focus, at = Date.now()) {
+  const distractions = Array.isArray(focus?.distractions) ? focus.distractions : [];
+  const totalSeconds = distractions.reduce((sum, item) => {
+    const stored = Math.max(0, Number(item.durationSeconds) || 0);
+    if (item.endedAt !== null && item.endedAt !== undefined) return sum + stored;
+    const startedAt = timestampOr(item.startedAt, timestampOr(focus?.distractionStartedAt, timestampOr(at)));
+    return sum + Math.max(stored, Math.floor((timestampOr(at) - startedAt) / 1000));
+  }, 0);
+  return { count: distractions.length, totalSeconds };
+}
+
 export function visibleTasks(tasks, { includeArchived = false } = {}) {
   return includeArchived ? tasks : tasks.filter((task) => !task.archived);
 }
@@ -305,6 +368,8 @@ export function getAnalytics(tasks, sessions, courses = [], reference = new Date
   const priority = ['high', 'medium', 'low'].map((key) => ({ label: PRIORITY_LABELS[key], key, count: live.filter((task) => task.priority === key).length })).filter((item) => item.count);
   const types = TASK_TYPES.map((key) => ({ label: TASK_TYPE_LABELS[key], key, count: live.filter((task) => task.type === key).length })).filter((item) => item.count);
   const focusMinutes = Math.floor(scopedSessions.filter((session) => session.status === 'completed').reduce((sum, session) => sum + session.activeSeconds, 0) / 60);
+  const distractions = scopedSessions.reduce((sum, session) => sum + (Number(session.distractions?.length) || 0), 0);
+  const distractionMinutes = Math.floor(scopedSessions.reduce((sum, session) => sum + (Number(session.distractionSeconds) || 0), 0) / 60);
   const days = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(startOfWeek(reference, { weekStartsOn: 1 }), index);
     const key = todayString(date);
@@ -321,6 +386,8 @@ export function getAnalytics(tasks, sessions, courses = [], reference = new Date
     withDeadline: live.filter((task) => task.dueDate).length,
     focusMinutes,
     sessionsCompleted: scopedSessions.filter((session) => session.status === 'completed').length,
+    distractions,
+    distractionMinutes,
     category: [...categoryMap.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count })),
     courses: getCourseProgress(courses, live).filter((item) => item.total).map((item) => ({ label: item.course.name, count: item.total, completed: item.completed })),
     types,
