@@ -106,8 +106,9 @@ function timestampOr(value, fallback = Date.now()) {
 
 export function getFocusActiveSeconds(focus, at = Date.now()) {
   const activeSeconds = Math.max(0, Number(focus?.activeSeconds) || 0);
-  if (focus?.status !== 'focusing' || !Number.isFinite(Number(focus.runningSince))) return Math.floor(activeSeconds);
-  return Math.floor(activeSeconds + Math.max(0, (timestampOr(at) - Number(focus.runningSince)) / 1000));
+  const runningSince = Number(focus?.runningSince);
+  if (focus?.status !== 'focusing' || focus?.runningSince === null || focus?.runningSince === undefined || !Number.isFinite(runningSince) || runningSince <= 0) return Math.floor(activeSeconds);
+  return Math.floor(activeSeconds + Math.max(0, (timestampOr(at) - runningSince) / 1000));
 }
 
 export function beginDistraction(focus, at = Date.now()) {

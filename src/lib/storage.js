@@ -235,6 +235,8 @@ export function normalizeActiveFocus(raw) {
   const statuses = ['focusing', 'paused', 'distracted', 'break'];
   const status = statuses.includes(raw.status) ? raw.status : null;
   if (!status) return null;
+  const sessionStartedAt = raw.sessionStartedAt !== null && raw.sessionStartedAt !== undefined && Number.isFinite(Number(raw.sessionStartedAt)) && Number(raw.sessionStartedAt) > 0 ? Number(raw.sessionStartedAt) : Date.now();
+  const parsedRunningSince = raw.runningSince !== null && raw.runningSince !== undefined && Number.isFinite(Number(raw.runningSince)) && Number(raw.runningSince) > 0 ? Number(raw.runningSince) : null;
   const distractions = normalizeDistractions(raw.distractions);
   const openDistraction = [...distractions].reverse().find((item) => item.endedAt === null);
   const distractionStartedAt = status === 'distracted'
@@ -246,8 +248,8 @@ export function normalizeActiveFocus(raw) {
     breakMinutes: Math.max(1, numberOr(raw.breakMinutes, 5)),
     status,
     activeSeconds: Math.max(0, Math.floor(numberOr(raw.activeSeconds, 0))),
-    runningSince: status === 'focusing' && raw.runningSince !== null && raw.runningSince !== undefined && Number.isFinite(Number(raw.runningSince)) ? Number(raw.runningSince) : null,
-    sessionStartedAt: numberOr(raw.sessionStartedAt, Date.now()),
+    runningSince: status === 'focusing' ? parsedRunningSince || sessionStartedAt : null,
+    sessionStartedAt,
     breakEndsAt: raw.breakEndsAt !== null && raw.breakEndsAt !== undefined && Number.isFinite(Number(raw.breakEndsAt)) ? Number(raw.breakEndsAt) : null,
     sessionId: raw.sessionId !== null && raw.sessionId !== undefined && Number.isFinite(Number(raw.sessionId)) ? Number(raw.sessionId) : null,
     distractionStartedAt,

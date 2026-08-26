@@ -87,6 +87,11 @@ describe('task domain', () => {
     expect(closed.distractions[0].durationSeconds).toBe(3);
   });
 
+  it('mengabaikan runningSince kosong agar timer tidak meloncat ke waktu tak terbatas', () => {
+    expect(getFocusActiveSeconds({ status: 'focusing', activeSeconds: 42, runningSince: null }, 175000)).toBe(42);
+    expect(getFocusActiveSeconds({ status: 'focusing', activeSeconds: 42, runningSince: 0 }, 175000)).toBe(42);
+  });
+
   it('membawa jejak distraksi ke analitik sesi', () => {
     const analytics = getAnalytics([task()], [{ id: 8, taskId: 1, plannedMinutes: 25, activeSeconds: 900, status: 'completed', startedAt: 100, endedAt: 200, rewardApplied: true, distractions: [{ id: 150, startedAt: 150, endedAt: 270, durationSeconds: 120 }], distractionSeconds: 120 }]);
     expect(analytics.distractions).toBe(1);

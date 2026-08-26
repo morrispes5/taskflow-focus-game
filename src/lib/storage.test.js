@@ -137,6 +137,16 @@ describe('storage migration', () => {
     expect(migrated.activeFocus.distractions[0].endedAt).toBeNull();
   });
 
+  it('memulihkan timer fokus lama yang tidak menyimpan runningSince', () => {
+    const migrated = normalizeAppData({
+      schemaVersion: 7,
+      tasks: [{ id: 4, text: 'Tugas fokus', completed: false, createdAt: 10 }],
+      activeFocus: { taskId: 4, status: 'focusing', activeSeconds: 42, sessionStartedAt: 1000 }
+    });
+    expect(migrated.activeFocus.runningSince).toBe(1000);
+    expect(migrated.activeFocus.activeSeconds).toBe(42);
+  });
+
   it('menyimpan folder materi dan backup v6', async () => {
     const { store } = createStore();
     const initial = await store.load();
