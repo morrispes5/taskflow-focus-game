@@ -233,7 +233,8 @@ export function getAgendaForDay(tasks, courses, dayKey) {
     sort: slot.start,
     title: course.name,
     meta: `${slot.start}–${slot.end}${slot.room ? ` · ${slot.room}` : ''}`,
-    color: course.color
+    color: course.color,
+    course
   })));
   const deadlines = visibleTasks(tasks).filter((task) => task.dueDate === dayKey).map((task) => ({
     kind: 'task',
@@ -241,6 +242,7 @@ export function getAgendaForDay(tasks, courses, dayKey) {
     title: task.text,
     meta: `${TASK_TYPE_LABELS[task.type] || 'Tugas'}${task.dueTime ? ` · ${task.dueTime}` : ''}`,
     task,
+    course: courses.find((course) => course.id === task.courseId) || null,
     completed: task.completed
   }));
   return [...classes, ...deadlines].sort((a, b) => a.sort.localeCompare(b.sort));

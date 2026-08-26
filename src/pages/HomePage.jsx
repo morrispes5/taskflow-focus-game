@@ -38,7 +38,7 @@ export function HomePage({ data, commit, toggleTask }) {
   const upcoming = getUpcomingDeadlines(data.tasks);
   const agenda = getTodayAgenda(data.tasks, data.courses);
   const courseProgress = getCourseProgress(data.courses, data.tasks).filter((item) => item.total);
-  const saveTask = (input, id) => commit((current) => id ? ({ ...current, tasks: current.tasks.map((task) => task.id === id ? { ...task, ...input, category: input.category?.trim() || null, dueDate: input.dueDate || null, dueTime: input.dueTime || null, estimateMinutes: Number(input.estimateMinutes) || 25, courseId: input.courseId || null, updatedAt: Date.now() } : task) }) : ({ ...current, tasks: [makeTask(input), ...current.tasks] }), id ? 'Tugas diperbarui.' : 'Tugas ditambahkan.');
+  const saveTask = (input, id) => commit((current) => id ? ({ ...current, tasks: current.tasks.map((task) => task.id === id ? { ...task, ...input, category: input.category?.trim() || null, dueDate: input.dueDate || null, dueTime: input.dueTime || null, estimateMinutes: Number(input.estimateMinutes) || 25, courseId: input.courseId || null, updatedAt: Date.now() } : task) }) : ({ ...current, tasks: [makeTask(input), ...current.tasks] }), id ? 'Tugas diperbarui.' : 'Tugas ditambahkan.', id ? null : 'taskAdded');
   useEffect(() => {
     const animation = playHeroSequence(heroRef.current, reduced);
     return () => animation?.pause?.();

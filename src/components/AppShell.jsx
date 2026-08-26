@@ -47,9 +47,9 @@ export function AppShell({ page, profile, progress, onboarding, notice, tourOpen
       </main>
       <nav className="bottom-nav" aria-label="Navigasi cepat">
         {MOBILE_NAV_ITEMS.map(({ href, page: itemPage, label, Icon }) => (
-          <a key={itemPage} className={page === itemPage ? 'active' : ''} href={href}><Icon size={18} /><span>{label}</span></a>
+          <a key={itemPage} className={page === itemPage ? 'active' : ''} href={href}>{page === itemPage && <motion.i className="bottom-nav-indicator" layoutId="bottom-nav-indicator" transition={{ duration: 0.18 }} />}<Icon size={18} /><span>{label}</span></a>
         ))}
-        <a className={page === 'settings' || page === 'analytics' ? 'active' : ''} href="settings.html"><Zap size={18} /><span>Lainnya</span></a>
+        <a className={page === 'settings' || page === 'analytics' ? 'active' : ''} href="settings.html">{(page === 'settings' || page === 'analytics') && <motion.i className="bottom-nav-indicator" layoutId="bottom-nav-indicator" transition={{ duration: 0.18 }} />}<Zap size={18} /><span>Lainnya</span></a>
       </nav>
       <AnimatePresence>{notice && <motion.div className="toast" role="status" aria-live="polite" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: 0.2 }}><Check size={15} />{notice.text}</motion.div>}</AnimatePresence>
       {onboarding.profileCompleted && tourOpen && <OnboardingTour onComplete={() => onCloseTutorial('complete')} onSkip={() => onCloseTutorial('skip')} />}

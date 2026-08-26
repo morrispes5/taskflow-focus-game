@@ -4,15 +4,15 @@ TaskFlow adalah ruang kerja fokus **offline** untuk pelajar dan mahasiswa. Penga
 
 Live: [morrispes5.github.io/taskflow-focus-game](https://morrispes5.github.io/taskflow-focus-game/)
 
-Repository: `taskflow-focus-game` (v4).
+Repository: `taskflow-focus-game` (v6).
 
 ## Fitur
 
 - Beranda dengan misi harian, agenda hari ini, countdown deadline, XP, level, streak, dan progres mata kuliah.
 - Task board dengan quick add, subtask, catatan, tautan, pin, arsip, duplikat, filter mata kuliah/jenis, dan tugas berulang.
-- Mata kuliah sebagai entitas: warna, kode, dosen, SKS, dan jadwal kuliah.
+- Mata kuliah sebagai entitas: warna, kode, dosen, SKS, jadwal kuliah, dan link folder materi/Google Drive.
 - Kalender bulan untuk deadline, ujian, dan jadwal kelas.
-- Focus Run 25, 50, atau durasi custom, dengan jeda, subtask, catatan sesi, chime, dan notifikasi selesai.
+- Focus Desk 25, 50, atau durasi custom, dengan brief tugas, link materi, subtask, catatan sesi, recap, feedback audio, soundscape lokal, dan notifikasi selesai.
 - Analitik completion rate, per mata kuliah, jenis tugas, keterlambatan, dan perjalanan tujuh hari.
 - Pengaturan profil, semester, tema (terang/gelap/sistem), motion, bunyi, pengingat browser, export/import JSON, dan reset.
 - First-run tanpa login: profil, tutorial, rekomendasi rules-based, lalu ajakan opsional menambah mata kuliah.
@@ -30,7 +30,7 @@ foldervio/
 │   ├── nav.js
 │   ├── pages/
 │   ├── components/
-│   ├── lib/          storage.js, domain.js, reminders.js
+│   ├── lib/          storage.js, domain.js, reminders.js, audio.js
 │   └── motion/anime.js
 ├── public/           ilustrasi, manifest, service worker
 ├── docs/             schema.md, CHANGELOG.md
@@ -59,11 +59,11 @@ npm test
 npm run build
 ```
 
-`npm test` mencakup domain tugas, mata kuliah, recurrence, kalender, reminder, migrasi schema 5, dan backup. `npm run build` memverifikasi seluruh entry HTML termasuk `calendar.html`.
+`npm test` mencakup domain tugas, mata kuliah, recurrence, kalender, reminder, audio lokal, migrasi schema 6, dan backup. `npm run build` memverifikasi seluruh entry HTML termasuk `calendar.html`.
 
 ## Penyimpanan lokal
 
-Setiap perangkat/profil browser punya workspace IndexedDB sendiri. Schema v5 **mengisi field baru** pada data lama dan tidak menghapus tugas yang sudah ada. Backup JSON v4 masih bisa diimport.
+Setiap perangkat/profil browser punya workspace IndexedDB sendiri. Schema v6 **mengisi field baru** pada data lama dan tidak menghapus tugas yang sudah ada. Backup JSON v4/v5 masih bisa diimport. Link Google Drive hanya disimpan sebagai tautan lokal dan tidak pernah disinkronkan TaskFlow.
 
 Pengguna perangkat bersama dapat memilih **Mulai workspace baru** dari Pengaturan.
 

@@ -31,7 +31,8 @@ src/
   components/             AppShell, dialog, TaskRow, CourseForm, onboarding
   lib/storage.js          IndexedDB, normalize*, backup, schemaVersion
   lib/domain.js           selector murni + applyTaskToggle + recurrence
-  lib/reminders.js        banner deadline + Notification + chime
+  lib/reminders.js        banner deadline + Notification
+  lib/audio.js            Web Audio feedback dan soundscape lokal
   motion/anime.js         sequence reward/hero
 ```
 
@@ -41,11 +42,11 @@ Halaman baru: buat `nama.html` dengan `data-page`, daftarkan di `vite.config.js`
 
 ## Data
 
-IndexedDB `taskflow_workspace` / store `workspace` / key `app-data`. Versi object store tetap `1`. Versi aplikasi ada di `schemaVersion` (sekarang **5**).
+IndexedDB `taskflow_workspace` / store `workspace` / key `app-data`. Versi object store tetap `1`. Versi aplikasi ada di `schemaVersion` (sekarang **6**).
 
-`normalizeAppData()` selalu mengeluarkan bentuk v5. Record lama tanpa `courses` atau field tugas baru diisi default, **bukan** di-reset.
+`normalizeAppData()` selalu mengeluarkan bentuk v6. Record lama tanpa `courses`, `Course.driveUrl`, atau preferensi soundscape diisi default, **bukan** di-reset.
 
-Backup JSON versi 4 tetap bisa diimport. Backup baru memakai `version: 5`.
+Backup JSON versi 4/v5 tetap bisa diimport. Backup baru memakai `version: 6`.
 
 ## Perintah
 
@@ -59,7 +60,9 @@ PowerShell di mesin ini bisa memblokir `npm.ps1`. Pakai `cmd /c "npm test"` jika
 
 ## Tes yang wajib hijau
 
-- Migrasi tugas v4 → v5 tidak menghapus teks/tugas.
+- Migrasi workspace v5 → v6 tidak menghapus teks, tugas, course, atau sesi.
+- Validasi URL folder materi dan label minggu semester.
+- Soundscape tidak autoplay dan tidak berbunyi ketika preference bunyi mati.
 - Recurrence weekly membuat salinan `dueDate + 7` dan mengarsipkan yang lama.
 - Filter course/type/arsip.
 - Interval semester: tanggal di dalam/luar batas, analitik `scope: 'semester'` vs `'all'`.
@@ -70,4 +73,4 @@ PowerShell di mesin ini bisa memblokir `npm.ps1`. Pakai `cmd /c "npm test"` jika
 
 Token di `base.css`. Dark mode: `html[data-theme="dark"]`. Preferensi `theme`: `light` | `dark` | `system`.
 Mobile: bottom nav di ≤760px. Target sentuh ≥44px.
-Motion: Motion for React untuk layout, Anime.js hanya untuk reward/hero.
+Motion: Motion for React untuk layout dan state UI, Anime.js hanya untuk reward/hero. Audio lokal memakai Web Audio dan tidak boleh memanggil jaringan.

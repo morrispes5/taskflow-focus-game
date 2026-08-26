@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.0.0 - semester workspace v6
+
+- Course dapat menyimpan folder Google Drive/materi secara lokal; Kalender dan Focus Desk menyediakan aksi buka folder.
+- Task link diberi label Link tugas / Drive; TaskFlow tidak melakukan OAuth, sinkronisasi, atau membaca isi Drive.
+- Fokus menjadi meja kerja satu tugas: brief, sumber materi, checklist, soundscape lokal, dan recap sesi.
+- Web Audio menambahkan feedback tindakan dan soundscape lo-fi, hujan, atau white noise tanpa file streaming.
+- Choreography terarah untuk dialog, task selesai, indikator mobile, kalender, dan state Focus Run; reduced motion tetap dihormati.
+- Schema dan backup naik ke v6 secara additive. Workspace v5 tetap dimigrasikan tanpa menghapus data.
+
 ## 4.0.1 — filter analitik semester
 
 - Analitik bisa difilter ke rentang semester (deadline / aktivitas di antara tanggal mulai–selesai) atau semua waktu.

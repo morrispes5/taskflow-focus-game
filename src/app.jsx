@@ -3,6 +3,7 @@ import { MotionConfig } from 'motion/react';
 import { loadAppData, saveAppData, resetAppData } from './lib/storage.js';
 import { applyTaskToggle, resolveTheme } from './lib/domain.js';
 import { getDueReminders, markRemindersNotified, sendNotification } from './lib/reminders.js';
+import { playFeedbackTone } from './lib/audio.js';
 import { AppShell } from './components/AppShell.jsx';
 import { WorkspaceLoading } from './components/ui.jsx';
 import { HomePage } from './pages/HomePage.jsx';
@@ -39,7 +40,7 @@ export default function TaskFlowApp() {
 
   useEffect(() => { hydrate(); }, [hydrate]);
 
-  const commit = useCallback((updater, message = '') => {
+  const commit = useCallback((updater, message = '', feedback = null) => {
     if (!dataRef.current) return;
     const next = updater(dataRef.current);
     dataRef.current = next;
@@ -50,6 +51,7 @@ export default function TaskFlowApp() {
       workspaceChannelRef.current?.postMessage('updated');
     }).catch((error) => setStorageError(error.message || 'Perubahan belum dapat disimpan.'));
     if (message) setNotice({ id: Date.now(), text: message });
+    if (feedback && next.preferences.sound) playFeedbackTone(feedback, next.preferences.focusSoundVolume);
   }, []);
 
   useEffect(() => {
@@ -100,8 +102,9 @@ export default function TaskFlowApp() {
 
   const toggleTask = useCallback((taskId) => {
     if (!dataRef.current) return;
+    const wasCompleted = dataRef.current.tasks.find((task) => task.id === taskId)?.completed;
     const { data: next, message } = applyTaskToggle(dataRef.current, taskId);
-    commit(() => next, message);
+    commit(() => next, message, wasCompleted ? null : 'complete');
   }, [commit]);
 
   const updatePreferences = (preferences) => commit((current) => ({ ...current, preferences: { ...current.preferences, ...preferences } }));

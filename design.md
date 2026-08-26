@@ -1,6 +1,6 @@
 # TaskFlow Design System dan Product Direction
 
-Status: Baseline v2 (schemaVersion 5)
+Status: Semester Workspace v6 (schemaVersion 6)
 Target: ruang kerja semester offline untuk pelajar dan mahasiswa
 Platform: web responsive, mobile-first, PWA
 Bahasa UI: Bahasa Indonesia
@@ -155,6 +155,8 @@ Elemen utama:
 - Status teks yang jelas: `Sedang fokus`, `Dijeda`, `Waktu istirahat`, atau `Sesi selesai`.
 - Kontrol utama dengan target sentuh minimal 44px.
 - Link keluar yang tetap aman dan tidak mudah terpencet.
+- Brief tugas, checklist, link tugas, serta folder materi yang dapat dibuka saat pengguna memang membutuhkannya.
+- Soundscape lokal opsional yang dimulai hanya setelah pengguna menekan Mulai; hening tetap menjadi pilihan sah.
 - Recap setelah sesi selesai: durasi aktif, status tugas, XP, dan tindakan berikutnya.
 
 ### Analitik
@@ -273,7 +275,7 @@ Motion harus terasa seperti satu bahasa, bukan kumpulan efek.
 
 ### Strategi teknis
 
-TaskFlow menggunakan React + Vite multi-page agar Beranda, Tugas, Fokus, Analitik, dan Pengaturan tetap terasa sebagai area kerja yang jelas. Motion for React menangani transisi/layout, sedangkan Anime.js dipakai untuk sequence reward dan entrance yang singkat. Data tetap offline melalui `localStorage`.
+TaskFlow menggunakan React + Vite multi-page agar Beranda, Tugas, Fokus, Analitik, dan Pengaturan tetap terasa sebagai area kerja yang jelas. Motion for React menangani transisi/layout, sedangkan Anime.js dipakai untuk sequence reward dan entrance yang singkat. Web Audio dipakai untuk feedback dan soundscape yang dibuat lokal. Data tetap offline melalui IndexedDB.
 
 ## 9. Data Contract Tahap Berikutnya
 
@@ -445,4 +447,5 @@ Tambahan yang tidak mengubah kepribadian produk:
 - Kalender membaca `dueDate`/`dueTime` dan `course.schedule`.
 - Pengingat browser dan chime Focus Run hanya berjalan saat aplikasi terbuka.
 - Tema `light` | `dark` | `system` memakai token yang sama di `base.css`.
-- Tidak ada backend. Tidak ada wipe data saat migrasi ke schema 5.
+- Folder materi hanya berupa URL yang dibuka atas aksi pengguna; tidak ada backend, OAuth, pembacaan, atau sinkronisasi Drive.
+- Tidak ada wipe data saat migrasi ke schema 6.

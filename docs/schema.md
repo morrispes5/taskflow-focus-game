@@ -1,6 +1,6 @@
 # TaskFlow data schema
 
-`schemaVersion` saat ini: **5**  
+`schemaVersion` saat ini: **6**
 IndexedDB: `taskflow_workspace` / object store `workspace` / record key `app-data`  
 Object store version tetap `1`. Yang berubah hanya isi record.
 
@@ -8,7 +8,7 @@ Object store version tetap `1`. Yang berubah hanya isi record.
 
 ```js
 {
-  schemaVersion: 5,
+  schemaVersion: 6,
   tasks: Task[],
   courses: Course[],
   semester: { name: string, startDate: string | null, endDate: string | null } | null,
@@ -17,7 +17,7 @@ Object store version tetap `1`. Yang berubah hanya isi record.
   progress: { totalXp, level, currentStreak, bestStreak, lastActiveDate, lastConsistencyRewardDate, rewardedTaskIds, milestones, notifiedKeys },
   sessions: Session[],
   activeFocus: object | null,
-  preferences: { motion, focusPreset, theme, sound, notify, customFocusMinutes }
+  preferences: { motion, focusPreset, theme, sound, notify, customFocusMinutes, focusSoundscape, focusSoundVolume }
 }
 ```
 
@@ -47,10 +47,25 @@ Saat tugas `daily`/`weekly` diselesaikan, tugas itu diarsipkan dan salinan aktif
 ## Course
 
 ```js
-{ id, name, code, color, lecturer, sks, schedule: [{ day: 0-6, start, end, room }] }
+{ id, name, code, color, lecturer, sks, driveUrl, schedule: [{ day: 0-6, start, end, room }] }
 ```
 
 Menghapus mata kuliah **tidak** menghapus tugas; `courseId` di-null-kan.
+
+`driveUrl` pada v6 adalah `string | null` dan hanya menerima URL `http`/`https` sepanjang maksimal 300 karakter. TaskFlow hanya membuka link atas aksi pengguna; aplikasi tidak login, mengambil, membaca, atau menyinkronkan isi Google Drive.
+
+## Preferensi v6
+
+| Field | Nilai | Default migrasi |
+|---|---|---|
+| `focusSoundscape` | `none` \| `lofi` \| `rain` \| `noise` | `none` |
+| `focusSoundVolume` | angka `0`-`100` | `55` |
+
+Soundscape dibuat dengan Web Audio lokal dan hanya dimulai setelah pengguna menekan Mulai Focus Run. Tidak dipulihkan otomatis setelah refresh.
+
+## Minggu semester
+
+`Minggu ke-N` adalah informasi turunan: dihitung dari selisih kalender antara `semester.startDate` dan `task.dueDate` (tanggal mulai adalah minggu 1). Nilai ini tidak disimpan pada task.
 
 ## Filter analitik semester
 
@@ -60,8 +75,8 @@ Tugas masuk semester jika `dueDate` (atau `completedAt` / `createdAt` jika tidak
 
 ## Backup
 
-`createBackup()` menulis `version: 5` plus `courses` dan `semester`.  
-`parseBackupPayload()` menerima array tugas mentah (legacy), backup v4, dan v5.
+`createBackup()` menulis `version: 6` plus `courses`, `semester`, dan preferensi soundscape.
+`parseBackupPayload()` menerima array tugas mentah (legacy), backup v4, v5, dan v6.
 
 ## Migrasi
 
