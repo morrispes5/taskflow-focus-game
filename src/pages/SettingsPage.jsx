@@ -54,7 +54,7 @@ export function SettingsPage({ data, commit, updatePreferences, onStartTutorial,
   const deleteCourse = (course) => commit((current) => ({
     ...current,
     courses: current.courses.filter((item) => item.id !== course.id),
-    tasks: current.tasks.map((task) => task.courseId === course.id ? { ...task, courseId: null } : task)
+    tasks: current.tasks.map((task) => task.courseId === course.id ? { ...task, courseId: null, meetingNumber: null } : task)
   }), `${terms.courseLabel} dihapus. Tugas terkait tetap ada.`);
   const enableNotify = async () => {
     const permission = await requestNotifyPermission();

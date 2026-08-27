@@ -314,5 +314,14 @@ describe('task domain', () => {
     const proTerms = getRoleTerminology('profesional');
     expect(proTerms.isAcademic).toBe(false);
     expect(proTerms.meetingLabel).toBe('Milestone');
+
+    const createdTask = makeTask({ text: 'Tugas P1', courseId: 10, meetingNumber: 1, recurrence: 'weekly', dueDate: '2026-09-01' });
+    expect(createdTask.meetingNumber).toBe(1);
+    expect(createdTask.courseId).toBe(10);
+
+    const recurringNext = spawnNextOccurrence(createdTask, new Date('2026-09-01').getTime());
+    expect(recurringNext.meetingNumber).toBe(1);
+    expect(recurringNext.courseId).toBe(10);
+    expect(recurringNext.dueDate).toBe('2026-09-08');
   });
 });

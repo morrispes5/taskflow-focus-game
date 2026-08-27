@@ -171,4 +171,41 @@ describe('storage migration', () => {
     expect(backup.preferences.focusSoundscape).toBe('rain');
     expect(backup.preferences.focusSoundVolume).toBe(100);
   });
+
+  it('menolak meetingNumber jika courseId kosong atau course tidak ada dalam workspace', () => {
+    const taskWithoutCourse = normalizeTask({ id: 1, text: 'Tugas lepas', courseId: null, meetingNumber: 3 });
+    expect(taskWithoutCourse.meetingNumber).toBeNull();
+
+    const appData = normalizeAppData({
+      courses: [{ id: 10, name: 'Web Dev', meetings: [{ id: 1, number: 1, title: 'HTML' }] }],
+      tasks: [
+        { id: 1, text: 'Valid meeting', courseId: 10, meetingNumber: 1 },
+        { id: 2, text: 'Orphan meeting', courseId: 999, meetingNumber: 2 }
+      ]
+    });
+    expect(appData.tasks[0].courseId).toBe(10);
+    expect(appData.tasks[0].meetingNumber).toBe(1);
+    expect(appData.tasks[1].courseId).toBeNull();
+    expect(appData.tasks[1].meetingNumber).toBeNull();
+  });
+
+  it('mengimpor backup schema v8 dengan daftar pertemuan course', () => {
+    const backupV8 = parseBackupPayload({
+      version: 8,
+      courses: [{
+        id: 1,
+        name: 'Basis Data',
+        meetings: [
+          { id: 101, number: 1, title: 'ERD', driveUrl: 'https://drive.google.com/erd', completed: true },
+          { id: 102, number: 8, title: 'UTS Basis Data', completed: false }
+        ]
+      }],
+      tasks: [{ id: 201, text: 'Pelajari ERD', courseId: 1, meetingNumber: 1 }]
+    });
+    expect(backupV8.schemaVersion).toBe(8);
+    expect(backupV8.courses[0].meetings).toHaveLength(2);
+    expect(backupV8.courses[0].meetings[0].completed).toBe(true);
+    expect(backupV8.courses[0].meetings[0].driveUrl).toBe('https://drive.google.com/erd');
+    expect(backupV8.tasks[0].meetingNumber).toBe(1);
+  });
 });

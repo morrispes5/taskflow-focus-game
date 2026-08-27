@@ -138,7 +138,7 @@ export function normalizeTask(raw, index = 0) {
     archived: Boolean(raw.archived),
     recurrence: RECURRENCE_OPTIONS.includes(raw.recurrence) ? raw.recurrence : 'none',
     reminderOffsetHours: REMINDER_OFFSETS.includes(reminder) ? reminder : null,
-    meetingNumber: Number.isInteger(Number(raw.meetingNumber)) && Number(raw.meetingNumber) >= 1 && Number(raw.meetingNumber) <= MAX_MEETINGS ? Number(raw.meetingNumber) : null
+    meetingNumber: (Number.isFinite(Number(raw.courseId)) && Number(raw.courseId) > 0 && Number.isInteger(Number(raw.meetingNumber)) && Number(raw.meetingNumber) >= 1 && Number(raw.meetingNumber) <= MAX_MEETINGS) ? Number(raw.meetingNumber) : null
   };
 }
 
@@ -325,7 +325,7 @@ export function normalizeAppData(raw) {
   const courses = Array.isArray(source.courses) ? source.courses.map(normalizeCourse).filter(Boolean).slice(0, MAX_COURSES) : [];
   const courseIds = new Set(courses.map((course) => course.id));
   const tasks = Array.isArray(source.tasks)
-    ? source.tasks.map(normalizeTask).filter(Boolean).map((task) => (task.courseId && !courseIds.has(task.courseId) ? { ...task, courseId: null } : task))
+    ? source.tasks.map(normalizeTask).filter(Boolean).map((task) => (task.courseId && !courseIds.has(task.courseId) ? { ...task, courseId: null, meetingNumber: null } : task))
     : [];
   return {
     schemaVersion: SCHEMA_VERSION,

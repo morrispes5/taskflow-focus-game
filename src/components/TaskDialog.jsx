@@ -39,7 +39,14 @@ export function TaskDialog({ open, task, courses = [], semester, role = 'mahasis
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [open, task]);
 
-  const setField = (field, value) => { setForm((current) => ({ ...current, [field]: value })); if (error?.field === field) setError(null); };
+  const setField = (field, value) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+      ...(field === 'courseId' && !value ? { meetingNumber: '' } : {})
+    }));
+    if (error?.field === field) setError(null);
+  };
 
   const selectedCourse = courses.find((c) => String(c.id) === String(form.courseId));
   const availableMeetings = selectedCourse?.meetings || [];
@@ -56,7 +63,7 @@ export function TaskDialog({ open, task, courses = [], semester, role = 'mahasis
     const payload = {
       ...form,
       courseId: form.courseId ? Number(form.courseId) : null,
-      meetingNumber: form.meetingNumber ? Number(form.meetingNumber) : null,
+      meetingNumber: form.courseId && form.meetingNumber ? Number(form.meetingNumber) : null,
       reminderOffsetHours: form.reminderOffsetHours === '' ? null : Number(form.reminderOffsetHours)
     };
     const validation = validateTaskInput(payload);

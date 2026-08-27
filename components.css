@@ -568,6 +568,7 @@ textarea.input { min-height: 92px; padding-block: 11px; resize: vertical; }
 .meeting-title.is-done-text { text-decoration: line-through; color: var(--color-muted); }
 .meeting-notes-preview { color: var(--color-muted); font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .meeting-edit-fields { display: grid; gap: 8px; flex: 1 1 100%; margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--color-line); }
+.meeting-edit-topline { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: 8px; }
 .input-small { min-height: 34px; padding: 4px 10px; font-size: 0.8rem; }
 .meeting-actions { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; flex: 0 0 auto; }
 .course-list { display: grid; gap: 8px; margin-bottom: 18px; }

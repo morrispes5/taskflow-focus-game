@@ -142,7 +142,7 @@ export function CourseMeetingModal({ open, course, role = 'mahasiswa', onClose, 
                         </div>
                       ) : (
                         <div className="meeting-edit-fields">
-                          <div className="form-grid-two">
+                          <div className="meeting-edit-topline">
                             <input
                               className="input input-small"
                               type="number"
@@ -152,7 +152,6 @@ export function CourseMeetingModal({ open, course, role = 'mahasiswa', onClose, 
                               onChange={(e) => handleUpdateMeeting(index, 'number', Number(e.target.value))}
                               aria-label="Nomor pertemuan"
                               title="Nomor pertemuan"
-                              style={{ maxWidth: '70px' }}
                             />
                             <input
                               className="input input-small"
