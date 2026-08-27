@@ -3,7 +3,8 @@ import { addDays } from 'date-fns';
 import {
   applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
   getProfileRecommendations, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
-  getSemesterWeek, replaceActiveFocus, resumeDistraction, selectDailyMission, sortTasks, spawnNextOccurrence, todayString, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput
+  getSemesterWeek, replaceActiveFocus, resumeDistraction, selectDailyMission, sortTasks, spawnNextOccurrence, todayString, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput,
+  validateMeetingInput, generateDefaultMeetings, getSemesterSksSummary, getCourseMeetingsProgress, getRoleTerminology
 } from './domain.js';
 import { createEmptyAppData } from './storage.js';
 
@@ -266,5 +267,52 @@ describe('task domain', () => {
     const dayAgenda = getAgendaForDay([task({ id: 4, text: 'Quiz PBO', dueDate: '2026-08-25', dueTime: '11:00' })], courses, '2026-08-25');
     expect(dayAgenda.some((item) => item.kind === 'class')).toBe(true);
     expect(dayAgenda.some((item) => item.kind === 'task')).toBe(true);
+  });
+
+  it('mengelola pertemuan kuliah, validasi input, progres, dan rekap SKS', () => {
+    const meetings = generateDefaultMeetings('PBO', 'mahasiswa');
+    expect(meetings).toHaveLength(16);
+    expect(meetings[0].title).toBe('Pertemuan 1: Pengantar & Silabus');
+    expect(meetings[7].title).toContain('UTS');
+    expect(meetings[15].title).toContain('UAS');
+
+    const professionalMilestones = generateDefaultMeetings('Web App', 'profesional');
+    expect(professionalMilestones).toHaveLength(4);
+
+    expect(validateMeetingInput({ number: 0 })?.field).toBe('number');
+    expect(validateMeetingInput({ number: 1, driveUrl: 'ftp://invalid' })?.field).toBe('driveUrl');
+    expect(validateMeetingInput({ number: 1, driveUrl: 'https://drive.google.com/slide1' })).toBeNull();
+    expect(validateMeetingInput({ number: 1 }, [{ id: 99, number: 1 }])?.field).toBe('number');
+
+    const course = makeCourse({
+      name: 'PBO',
+      sks: 3,
+      meetings: [
+        { id: 1, number: 1, title: 'Intro', completed: true },
+        { id: 2, number: 2, title: 'Class & Object', completed: false }
+      ]
+    }, 10);
+    expect(course.meetings).toHaveLength(2);
+    const progress = getCourseMeetingsProgress(course);
+    expect(progress.totalMeetings).toBe(2);
+    expect(progress.completedMeetings).toBe(1);
+    expect(progress.percentage).toBe(50);
+
+    const sksSummary = getSemesterSksSummary([
+      course,
+      makeCourse({ name: 'Basis Data', sks: 4 }, 11),
+      makeCourse({ name: 'Etika', sks: null }, 12)
+    ]);
+    expect(sksSummary.totalSks).toBe(7);
+    expect(sksSummary.courseCountWithSks).toBe(2);
+    expect(sksSummary.totalCourses).toBe(3);
+
+    const academicTerms = getRoleTerminology('mahasiswa');
+    expect(academicTerms.isAcademic).toBe(true);
+    expect(academicTerms.meetingLabel).toBe('Pertemuan');
+
+    const proTerms = getRoleTerminology('profesional');
+    expect(proTerms.isAcademic).toBe(false);
+    expect(proTerms.meetingLabel).toBe('Milestone');
   });
 });

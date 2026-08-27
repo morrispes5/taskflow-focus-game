@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, CircleHelp, Download, Sparkles, Trash2, Upload, Zap } from 'lucide-react';
 import { createBackup, parseBackupPayload, DEFAULT_PROFILE, FOCUS_SOUNDSCAPES, FOCUS_SOUNDSCAPE_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES } from '../lib/storage.js';
-import { makeCourse, validateProfileInput, validateSemesterInput } from '../lib/domain.js';
+import { makeCourse, validateProfileInput, validateSemesterInput, getRoleTerminology, makeTask } from '../lib/domain.js';
 import { requestNotifyPermission } from '../lib/reminders.js';
 import { ConfirmDialog } from '../components/ui.jsx';
 import { CourseManager } from '../components/CourseForm.jsx';
@@ -12,6 +12,7 @@ export function SettingsPage({ data, commit, updatePreferences, onStartTutorial,
   const [status, setStatus] = useState({ text: '', error: false });
   const [confirm, setConfirm] = useState(null);
   const fileRef = useRef(null);
+  const terms = getRoleTerminology(data.profile.role);
   useEffect(() => setProfile(data.profile), [data.profile]);
   useEffect(() => setSemester(data.semester || { name: '', startDate: '', endDate: '' }), [data.semester]);
   const saveProfile = (event) => { event.preventDefault(); const validation = validateProfileInput(profile); if (validation) { setStatus({ text: validation.message, error: true }); return; } commit((current) => ({ ...current, profile: { ...current.profile, name: profile.name.trim(), role: profile.role, goal: profile.goal.trim(), tagline: profile.tagline.trim() || DEFAULT_PROFILE.tagline }, onboarding: { ...current.onboarding, profileCompleted: true } })); setStatus({ text: 'Profil tersimpan.', error: false }); };
@@ -30,19 +31,38 @@ export function SettingsPage({ data, commit, updatePreferences, onStartTutorial,
     const course = makeCourse(input, id || Date.now());
     const courses = id ? current.courses.map((item) => item.id === id ? { ...item, ...course, id } : item) : [...current.courses, course];
     return { ...current, courses, onboarding: { ...current.onboarding, coursesIntroDismissed: true } };
-  }, id ? 'Mata kuliah diperbarui.' : 'Mata kuliah ditambahkan.');
+  }, id ? `${terms.courseLabel} diperbarui.` : `${terms.courseLabel} ditambahkan.`);
+  const saveCourseMeetings = (courseId, meetings) => commit((current) => ({
+    ...current,
+    courses: current.courses.map((item) => item.id === courseId ? { ...item, meetings } : item)
+  }), `Daftar ${terms.meetingLabel.toLowerCase()} disimpan.`);
+  const createTaskForMeeting = (course, meeting) => {
+    const isAcademic = data.profile.role === 'mahasiswa' || data.profile.role === 'pelajar';
+    const meetingTag = isAcademic && meeting.number === 8 ? 'UTS' : isAcademic && meeting.number === 16 ? 'UAS' : `${terms.meetingLabel} ${meeting.number}`;
+    const newTask = makeTask({
+      text: `${meeting.title || meetingTag}`,
+      courseId: course.id,
+      meetingNumber: meeting.number,
+      url: meeting.driveUrl || null,
+      notes: meeting.notes || '',
+      type: meeting.number === 8 || meeting.number === 16 ? 'ujian' : 'tugas',
+      priority: 'medium',
+      estimateMinutes: 25
+    });
+    commit((current) => ({ ...current, tasks: [newTask, ...current.tasks] }), `Tugas untuk ${meetingTag} dibuat.`);
+  };
   const deleteCourse = (course) => commit((current) => ({
     ...current,
     courses: current.courses.filter((item) => item.id !== course.id),
     tasks: current.tasks.map((task) => task.courseId === course.id ? { ...task, courseId: null } : task)
-  }), 'Mata kuliah dihapus. Tugas terkait tetap ada.');
+  }), `${terms.courseLabel} dihapus. Tugas terkait tetap ada.`);
   const enableNotify = async () => {
     const permission = await requestNotifyPermission();
     if (permission === 'granted') { updatePreferences({ notify: true }); setStatus({ text: 'Pengingat browser diizinkan. Berjalan saat TaskFlow terbuka.', error: false }); }
     else setStatus({ text: 'Izin notifikasi belum diberikan.', error: true });
   };
   return <section className="settings-layout"><div className="settings-main">
-    <article className="card settings-card" id="courses"><div className="card-header"><div><p className="section-kicker">Mata kuliah</p><h2>Daftar yang sedang kamu jalani</h2></div><span className="card-icon"><Sparkles size={18} /></span></div><CourseManager courses={data.courses} onSave={saveCourse} onDelete={deleteCourse} /></article>
+    <article className="card settings-card" id="courses"><div className="card-header"><div><p className="section-kicker">{terms.courseLabel}</p><h2>{terms.isAcademic ? 'Daftar yang sedang kamu jalani' : 'Daftar proyek & area kerja'}</h2></div><span className="card-icon"><Sparkles size={18} /></span></div><CourseManager courses={data.courses} role={data.profile.role} onSave={saveCourse} onDelete={deleteCourse} onSaveMeetings={saveCourseMeetings} onCreateTaskForMeeting={createTaskForMeeting} /></article>
     <article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Semester</p><h2>Bingkai waktu opsional</h2></div></div><form className="form-stack" onSubmit={saveSemester}><div className="field-group"><label htmlFor="semester-name">Nama semester</label><input id="semester-name" className="input" value={semester.name || ''} onChange={(event) => setSemester((current) => ({ ...current, name: event.target.value }))} placeholder="Ganjil 2026" /></div><div className="form-grid-two"><div className="field-group"><label htmlFor="semester-start">Mulai</label><input id="semester-start" className="input" type="date" value={semester.startDate || ''} onChange={(event) => setSemester((current) => ({ ...current, startDate: event.target.value }))} /></div><div className="field-group"><label htmlFor="semester-end">Selesai</label><input id="semester-end" className="input" type="date" value={semester.endDate || ''} onChange={(event) => setSemester((current) => ({ ...current, endDate: event.target.value }))} /></div></div><p className="muted">Tanggal ini dipakai Analitik untuk memfilter tugas dan sesi fokus semester berjalan.</p><button className="btn btn-secondary" type="submit">Simpan semester</button></form></article>
     <article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Profil</p><h2>Ruang kerja yang terasa milikmu</h2></div><span className="card-icon"><Sparkles size={18} /></span></div><form className="form-stack" onSubmit={saveProfile}><div className="field-group"><label htmlFor="profile-name">Nama panggilan</label><input id="profile-name" className="input" maxLength={40} value={profile.name} onChange={(event) => setProfile((current) => ({ ...current, name: event.target.value }))} /></div><div className="field-group"><label htmlFor="profile-role">Peran</label><select id="profile-role" className="input" value={profile.role} onChange={(event) => setProfile((current) => ({ ...current, role: event.target.value }))}><option value="">Pilih peran</option>{PROFILE_ROLES.map((role) => <option key={role} value={role}>{PROFILE_ROLE_LABELS[role]}</option>)}</select></div><div className="field-group"><label htmlFor="profile-goal">Tujuan utama</label><textarea id="profile-goal" className="input" maxLength={120} value={profile.goal} onChange={(event) => setProfile((current) => ({ ...current, goal: event.target.value }))} placeholder="Contoh: Menyelesaikan proyek akhir dengan lebih teratur" /></div><div className="field-group"><label htmlFor="profile-tagline">Tagline <span className="label-hint">opsional</span></label><input id="profile-tagline" className="input" maxLength={80} value={profile.tagline} onChange={(event) => setProfile((current) => ({ ...current, tagline: event.target.value }))} placeholder="Pelan-pelan tapi selesai" /></div><div className="action-row"><button className="btn btn-primary" type="submit"><Check size={16} />Simpan profil</button>{status.text && <span className={status.error ? 'form-status form-status-error' : 'form-status'} role="status">{status.text}</span>}</div></form></article>
     <article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Tampilan dan fokus</p><h2>Atur rasa interaksinya</h2></div><span className="card-icon"><Zap size={18} /></span></div><div className="settings-options">

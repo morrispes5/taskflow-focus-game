@@ -1,7 +1,8 @@
 import { addDays, differenceInCalendarDays, endOfDay, format, isWithinInterval, parseISO, startOfMonth, startOfWeek } from 'date-fns';
 import {
-  normalizeTask, PRIORITY_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES, MAX_PROFILE_GOAL_LENGTH, MAX_PROFILE_NAME_LENGTH,
-  MAX_COURSE_NAME, MAX_COURSES, MAX_NOTES_LENGTH, MAX_SUBTASKS, MAX_TASK_LENGTH, MAX_URL_LENGTH, STREAK_FREEZE_LIMIT, TASK_TYPES, TASK_TYPE_LABELS, COURSE_COLORS,
+  normalizeTask, normalizeMeeting, PRIORITY_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES, MAX_PROFILE_GOAL_LENGTH, MAX_PROFILE_NAME_LENGTH,
+  MAX_COURSE_NAME, MAX_COURSES, MAX_NOTES_LENGTH, MAX_SUBTASKS, MAX_TASK_LENGTH, MAX_URL_LENGTH, MAX_MEETINGS, MAX_MEETING_TITLE, MAX_MEETING_NOTES,
+  STREAK_FREEZE_LIMIT, TASK_TYPES, TASK_TYPE_LABELS, COURSE_COLORS,
   isTimeString
 } from './storage.js';
 
@@ -607,6 +608,9 @@ export function makeTask(input, id = Date.now()) {
 }
 
 export function makeCourse(input, id = Date.now()) {
+  const meetings = Array.isArray(input.meetings)
+    ? input.meetings.map(normalizeMeeting).filter(Boolean).slice(0, MAX_MEETINGS)
+    : [];
   return {
     id,
     name: String(input.name ?? '').trim(),
@@ -615,7 +619,104 @@ export function makeCourse(input, id = Date.now()) {
     lecturer: String(input.lecturer ?? '').trim(),
     sks: Number(input.sks) || null,
     schedule: Array.isArray(input.schedule) ? input.schedule : [],
+    meetings,
     driveUrl: String(input.driveUrl ?? '').trim() || null
+  };
+}
+
+export function validateMeetingInput(input, existing = []) {
+  const number = Number(input.number);
+  if (!Number.isInteger(number) || number < 1 || number > MAX_MEETINGS) {
+    return { field: 'number', message: `Nomor harus antara 1 dan ${MAX_MEETINGS}.` };
+  }
+  const title = String(input.title ?? '').trim();
+  if (title.length > MAX_MEETING_TITLE) {
+    return { field: 'title', message: `Judul materi maksimal ${MAX_MEETING_TITLE} karakter.` };
+  }
+  const driveUrl = String(input.driveUrl ?? '').trim();
+  if (driveUrl.length > MAX_URL_LENGTH) {
+    return { field: 'driveUrl', message: `Tautan materi maksimal ${MAX_URL_LENGTH} karakter.` };
+  }
+  if (driveUrl && !/^https?:\/\//i.test(driveUrl)) {
+    return { field: 'driveUrl', message: 'Tautan materi harus diawali http:// atau https://.' };
+  }
+  const notes = String(input.notes ?? '').trim();
+  if (notes.length > MAX_MEETING_NOTES) {
+    return { field: 'notes', message: `Catatan materi maksimal ${MAX_MEETING_NOTES} karakter.` };
+  }
+  if (existing.some((meeting) => meeting.id !== input.id && meeting.number === number)) {
+    return { field: 'number', message: `Pertemuan/Milestone ke-${number} sudah ada.` };
+  }
+  return null;
+}
+
+export function generateDefaultMeetings(courseName = '', role = 'mahasiswa') {
+  const isProfessional = role === 'profesional' || role === 'lainnya';
+  if (isProfessional) {
+    return [
+      { id: Date.now() + 1, number: 1, title: 'Tahap 1: Riset & Perencanaan', driveUrl: null, completed: false, notes: '' },
+      { id: Date.now() + 2, number: 2, title: 'Tahap 2: Implementasi Awal', driveUrl: null, completed: false, notes: '' },
+      { id: Date.now() + 3, number: 3, title: 'Tahap 3: Review & Pengujian', driveUrl: null, completed: false, notes: '' },
+      { id: Date.now() + 4, number: 4, title: 'Tahap 4: Peluncuran & Evaluasi Akhir', driveUrl: null, completed: false, notes: '' }
+    ];
+  }
+
+  const list = [];
+  const baseTime = Date.now();
+  for (let i = 1; i <= 16; i++) {
+    let title = `Pertemuan ${i}: Topik Materi`;
+    if (i === 1) title = 'Pertemuan 1: Pengantar & Silabus';
+    else if (i === 8) title = 'Pertemuan 8: UTS (Ujian Tengah Semester)';
+    else if (i === 16) title = 'Pertemuan 16: UAS (Ujian Akhir Semester)';
+
+    list.push({
+      id: baseTime + i,
+      number: i,
+      title,
+      driveUrl: null,
+      completed: false,
+      notes: ''
+    });
+  }
+  return list;
+}
+
+export function getSemesterSksSummary(courses = []) {
+  const safeCourses = Array.isArray(courses) ? courses : [];
+  const totalSks = safeCourses.reduce((sum, course) => sum + (Number(course.sks) || 0), 0);
+  const courseCountWithSks = safeCourses.filter((course) => Number(course.sks) > 0).length;
+  return {
+    totalSks,
+    courseCountWithSks,
+    totalCourses: safeCourses.length
+  };
+}
+
+export function getCourseMeetingsProgress(course) {
+  const meetings = Array.isArray(course?.meetings) ? course.meetings : [];
+  const totalMeetings = meetings.length;
+  const completedMeetings = meetings.filter((m) => Boolean(m.completed)).length;
+  const percentage = totalMeetings > 0 ? Math.round((completedMeetings / totalMeetings) * 100) : 0;
+  return {
+    totalMeetings,
+    completedMeetings,
+    percentage
+  };
+}
+
+export function getRoleTerminology(role = 'mahasiswa') {
+  const isAcademic = role === 'mahasiswa' || role === 'pelajar';
+  return {
+    role,
+    isAcademic,
+    courseLabel: isAcademic ? 'Mata Kuliah' : 'Proyek / Area',
+    courseListLabel: isAcademic ? 'Mata kuliah' : 'Proyek',
+    meetingLabel: isAcademic ? 'Pertemuan' : 'Milestone',
+    meetingsHeading: isAcademic ? 'Pertemuan & Materi Kuliah' : 'Milestone & Dokumen Proyek',
+    generateButtonLabel: isAcademic ? 'Buat 16 Pertemuan Otomatis' : 'Buat 4 Milestone Proyek',
+    driveHint: isAcademic ? 'Folder Google Drive / materi' : 'Folder Google Drive / dokumen proyek',
+    sksLabel: isAcademic ? 'SKS' : 'Bobot',
+    sksSummaryLabel: isAcademic ? 'Beban SKS Semester' : 'Total Bobot Proyek'
   };
 }
 

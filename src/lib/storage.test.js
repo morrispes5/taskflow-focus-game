@@ -105,7 +105,7 @@ describe('storage migration', () => {
     expect(() => parseBackupPayload({ version: 2 })).toThrow('Format JSON tidak sesuai.');
   });
 
-  it('memigrasikan workspace v6 ke schema 7 tanpa menghapus data', async () => {
+  it('memigrasikan workspace v6/v7 ke schema 8 tanpa menghapus data', async () => {
     const { store } = createStore();
     const initial = await store.load();
     await store.save({
@@ -115,11 +115,12 @@ describe('storage migration', () => {
       tasks: [{ id: 4, text: 'Tugas lama', completed: false, createdAt: 10, updatedAt: 10, priority: 'high', category: 'Kuliah', estimateMinutes: 50 }]
     });
     const migrated = await store.load();
-    expect(migrated.schemaVersion).toBe(7);
+    expect(migrated.schemaVersion).toBe(8);
     expect(migrated.tasks).toHaveLength(1);
     expect(migrated.tasks[0].text).toBe('Tugas lama');
     expect(migrated.tasks[0].type).toBe('pribadi');
     expect(migrated.tasks[0].subtasks).toEqual([]);
+    expect(migrated.tasks[0].meetingNumber).toBeNull();
     expect(migrated.tasks[0].recurrence).toBe('none');
     expect(migrated.courses).toEqual([]);
     expect(migrated.preferences.theme).toBe('system');
@@ -134,7 +135,7 @@ describe('storage migration', () => {
       sessions: [{ id: 30, taskId: 4, plannedMinutes: 50, activeSeconds: 900, status: 'completed', startedAt: 10, endedAt: 100, rewardApplied: true }],
       activeFocus: { taskId: 4, plannedMinutes: 50, breakMinutes: 10, status: 'distracted', activeSeconds: 900, runningSince: 999, sessionStartedAt: 10, distractionStartedAt: 1000, distractions: [{ id: 1000, startedAt: 1000, endedAt: null }] }
     });
-    expect(migrated.schemaVersion).toBe(7);
+    expect(migrated.schemaVersion).toBe(8);
     expect(migrated.sessions[0].distractions).toEqual([]);
     expect(migrated.sessions[0].distractionSeconds).toBe(0);
     expect(migrated.activeFocus.status).toBe('distracted');

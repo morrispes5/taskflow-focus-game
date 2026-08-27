@@ -25,6 +25,11 @@ export function TaskRow({ task, courses = [], onToggle, onEdit, onDelete, onPin,
         <div className="task-meta">
           <span className={`task-due task-due-${due.tone}`}><CalendarClock size={13} aria-hidden="true" />{due.label}</span>
           {label && <span className="category-badge">{course && <CourseDot color={course.color} />}{label}</span>}
+          {task.meetingNumber && (
+            <span className="category-badge meeting-tag-badge" title={`Pertemuan / Milestone ${task.meetingNumber}`}>
+              {task.meetingNumber === 8 ? 'UTS' : task.meetingNumber === 16 ? 'UAS' : `P${task.meetingNumber}`}
+            </span>
+          )}
           <span className="task-estimate"><Clock3 size={12} aria-hidden="true" />{task.estimateMinutes} m fokus</span>
           {sub.total > 0 && <span className="task-subtasks">{sub.done}/{sub.total} langkah</span>}
           {task.url && <span className="task-link"><Paperclip size={12} />tautan</span>}

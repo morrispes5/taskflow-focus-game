@@ -1,19 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Plus, Trash2 } from 'lucide-react';
-import { getSemesterWeek, validateTaskInput } from '../lib/domain.js';
+import { getRoleTerminology, getSemesterWeek, validateTaskInput } from '../lib/domain.js';
 import { ESTIMATE_OPTIONS, RECURRENCE_LABELS, RECURRENCE_OPTIONS, REMINDER_OFFSETS, TASK_TYPE_LABELS, TASK_TYPES } from '../lib/storage.js';
 import { Modal } from './ui.jsx';
 
 const emptyForm = {
   text: '', dueDate: '', dueTime: '', priority: 'medium', category: '', estimateMinutes: 25,
-  courseId: '', type: 'tugas', notes: '', url: '', recurrence: 'none', reminderOffsetHours: '', subtasks: []
+  courseId: '', meetingNumber: '', type: 'tugas', notes: '', url: '', recurrence: 'none', reminderOffsetHours: '', subtasks: []
 };
 
-export function TaskDialog({ open, task, courses = [], semester, onClose, onSave }) {
+export function TaskDialog({ open, task, courses = [], semester, role = 'mahasiswa', onClose, onSave }) {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState(null);
   const [subtaskDraft, setSubtaskDraft] = useState('');
   const inputRef = useRef(null);
+  const terms = getRoleTerminology(role);
+
   useEffect(() => {
     if (!open) return;
     setForm({
@@ -24,6 +26,7 @@ export function TaskDialog({ open, task, courses = [], semester, onClose, onSave
       category: task?.category || '',
       estimateMinutes: task?.estimateMinutes || 25,
       courseId: task?.courseId || '',
+      meetingNumber: task?.meetingNumber ?? '',
       type: task?.type || 'tugas',
       notes: task?.notes || '',
       url: task?.url || '',
@@ -35,18 +38,25 @@ export function TaskDialog({ open, task, courses = [], semester, onClose, onSave
     setError(null);
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [open, task]);
+
   const setField = (field, value) => { setForm((current) => ({ ...current, [field]: value })); if (error?.field === field) setError(null); };
+
+  const selectedCourse = courses.find((c) => String(c.id) === String(form.courseId));
+  const availableMeetings = selectedCourse?.meetings || [];
+
   const addSubtask = () => {
     const text = subtaskDraft.trim();
     if (!text) return;
     setForm((current) => ({ ...current, subtasks: [...current.subtasks, { id: Date.now(), text, completed: false }] }));
     setSubtaskDraft('');
   };
+
   const submit = (event) => {
     event.preventDefault();
     const payload = {
       ...form,
       courseId: form.courseId ? Number(form.courseId) : null,
+      meetingNumber: form.meetingNumber ? Number(form.meetingNumber) : null,
       reminderOffsetHours: form.reminderOffsetHours === '' ? null : Number(form.reminderOffsetHours)
     };
     const validation = validateTaskInput(payload);
@@ -54,13 +64,27 @@ export function TaskDialog({ open, task, courses = [], semester, onClose, onSave
     onSave(payload, task?.id);
     onClose();
   };
+
   return <Modal open={open} onClose={onClose} title={task ? 'Edit tugas' : 'Tambah tugas'} eyebrow="Atur misi">
     <form className="form-stack" onSubmit={submit}>
       <div className="field-group"><label htmlFor="task-title">Judul tugas <span aria-hidden="true">*</span></label><input ref={inputRef} id="task-title" className="input" value={form.text} onChange={(event) => setField('text', event.target.value)} maxLength={120} aria-invalid={error?.field === 'text'} aria-describedby="task-title-error" autoComplete="off" /><p id="task-title-error" className="field-error" role="alert">{error?.field === 'text' ? error.message : ''}</p></div>
       <div className="form-grid-two">
         <div className="field-group"><label htmlFor="task-type">Jenis</label><select id="task-type" className="input" value={form.type} onChange={(event) => setField('type', event.target.value)}>{TASK_TYPES.map((type) => <option key={type} value={type}>{TASK_TYPE_LABELS[type]}</option>)}</select></div>
-        <div className="field-group"><label htmlFor="task-course">Mata kuliah</label><select id="task-course" className="input" value={form.courseId} onChange={(event) => setField('courseId', event.target.value)}><option value="">Tanpa mata kuliah</option>{courses.map((course) => <option key={course.id} value={course.id}>{course.code ? `${course.code} · ` : ''}{course.name}</option>)}</select></div>
+        <div className="field-group"><label htmlFor="task-course">{terms.courseLabel}</label><select id="task-course" className="input" value={form.courseId} onChange={(event) => { setField('courseId', event.target.value); setField('meetingNumber', ''); }}><option value="">Tanpa {terms.courseListLabel}</option>{courses.map((course) => <option key={course.id} value={course.id}>{course.code ? `${course.code} · ` : ''}{course.name}</option>)}</select></div>
       </div>
+      {availableMeetings.length > 0 && (
+        <div className="field-group">
+          <label htmlFor="task-meeting">{terms.meetingLabel} / Materi <span className="label-hint">opsional</span></label>
+          <select id="task-meeting" className="input" value={form.meetingNumber} onChange={(event) => setField('meetingNumber', event.target.value)}>
+            <option value="">Tanpa {terms.meetingLabel.toLowerCase()} spesifik</option>
+            {availableMeetings.map((m) => (
+              <option key={m.id || m.number} value={m.number}>
+                {terms.isAcademic && m.number === 8 ? 'UTS: ' : terms.isAcademic && m.number === 16 ? 'UAS: ' : `${terms.meetingLabel} ${m.number}: `}{m.title || `Topik ${m.number}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="form-grid-two">
         <div className="field-group"><label htmlFor="task-due">Deadline <span className="label-hint">opsional</span></label><input id="task-due" className="input" type="date" value={form.dueDate} onChange={(event) => setField('dueDate', event.target.value)} aria-invalid={error?.field === 'dueDate'} />{getSemesterWeek(form.dueDate, semester) && <p className="field-hint">Minggu ke-{getSemesterWeek(form.dueDate, semester)}</p>}<p className="field-error">{error?.field === 'dueDate' ? error.message : ''}</p></div>
         <div className="field-group"><label htmlFor="task-time">Jam</label><input id="task-time" className="input" type="time" value={form.dueTime} onChange={(event) => setField('dueTime', event.target.value)} aria-invalid={error?.field === 'dueTime'} /><p className="field-error">{error?.field === 'dueTime' ? error.message : ''}</p></div>

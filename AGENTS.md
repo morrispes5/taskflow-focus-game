@@ -42,11 +42,11 @@ Halaman baru: buat `nama.html` dengan `data-page`, daftarkan di `vite.config.js`
 
 ## Data
 
-IndexedDB `taskflow_workspace` / store `workspace` / key `app-data`. Versi object store tetap `1`. Versi aplikasi ada di `schemaVersion` (sekarang **7**).
+IndexedDB `taskflow_workspace` / store `workspace` / key `app-data`. Versi object store tetap `1`. Versi aplikasi ada di `schemaVersion` (sekarang **8**).
 
-`normalizeAppData()` selalu mengeluarkan bentuk v7. Record lama tanpa `courses`, `Course.driveUrl`, preferensi soundscape, atau histori distraksi diisi default, **bukan** di-reset.
+`normalizeAppData()` selalu mengeluarkan bentuk v8. Record lama tanpa `courses`, `Course.meetings`, `Course.driveUrl`, preferensi soundscape, atau histori distraksi diisi default, **bukan** di-reset.
 
-Backup JSON versi 4/v5/v6 tetap bisa diimport. Backup baru memakai `version: 7`.
+Backup JSON versi 4/v5/v6/v7 tetap bisa diimport. Backup baru memakai `version: 8`.
 
 ## Perintah
 

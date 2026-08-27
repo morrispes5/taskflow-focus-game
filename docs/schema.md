@@ -1,6 +1,6 @@
 # TaskFlow data schema
 
-`schemaVersion` saat ini: **7**
+`schemaVersion` saat ini: **8**
 IndexedDB: `taskflow_workspace` / object store `workspace` / record key `app-data`  
 Object store version tetap `1`. Yang berubah hanya isi record.
 
@@ -8,7 +8,7 @@ Object store version tetap `1`. Yang berubah hanya isi record.
 
 ```js
 {
-  schemaVersion: 7,
+  schemaVersion: 8,
   tasks: Task[],
   courses: Course[],
   semester: { name: string, startDate: string | null, endDate: string | null } | null,
@@ -27,12 +27,13 @@ Object store version tetap `1`. Yang berubah hanya isi record.
 
 Field lama (wajib tetap ada): `id`, `text`, `completed`, `createdAt`, `updatedAt`, `completedAt`, `dueDate`, `priority`, `category`, `estimateMinutes`.
 
-Field v5:
+Field v5/v8:
 
-| Field | Default migrasi v4 |
+| Field | Default migrasi v4..v7 |
 |---|---|
 | `dueTime` | `null` (`HH:mm`) |
 | `courseId` | `null` |
+| `meetingNumber` | `null` (nomor pertemuan 1..32) |
 | `type` | `'pribadi'` |
 | `notes` | `''` |
 | `subtasks` | `[]` |
@@ -46,15 +47,35 @@ Field v5:
 
 Saat tugas `daily`/`weekly` diselesaikan, tugas itu diarsipkan dan salinan aktif baru dibuat dengan `dueDate` +1 / +7 hari. XP tidak dibatalkan jika tugas dibuka kembali.
 
-## Course
+## Course & Meetings (v8)
 
 ```js
-{ id, name, code, color, lecturer, sks, driveUrl, schedule: [{ day: 0-6, start, end, room }] }
+{
+  id: number,
+  name: string,
+  code: string,
+  color: string,
+  lecturer: string,
+  sks: number | null,
+  driveUrl: string | null,
+  schedule: [{ day: 0-6, start: string, end: string, room: string | null }],
+  meetings: Meeting[]
+}
+
+Meeting = {
+  id: number,
+  number: number,
+  title: string,
+  driveUrl: string | null,
+  completed: boolean,
+  notes: string
+}
 ```
 
-Menghapus mata kuliah **tidak** menghapus tugas; `courseId` di-null-kan.
-
-`driveUrl` pada v6 adalah `string | null` dan hanya menerima URL `http`/`https` sepanjang maksimal 300 karakter. TaskFlow hanya membuka link atas aksi pengguna; aplikasi tidak login, mengambil, membaca, atau menyinkronkan isi Google Drive.
+- Menghapus mata kuliah **tidak** menghapus tugas; `courseId` di-null-kan.
+- `driveUrl` (pada level course maupun meeting) adalah `string | null` dan hanya menerima URL `http`/`https` sepanjang maksimal 300 karakter. TaskFlow hanya membuka link atas aksi pengguna; aplikasi tidak login, mengambil, membaca, atau menyinkronkan isi Google Drive.
+- `meetings` berisi daftar pertemuan (standar 16 pertemuan kuliah dengan UTS di P8 & UAS di P16, atau 4 milestone proyek untuk pengguna profesional).
+- Antarmuka beradaptasi sesuai `profile.role` (*Progressive Disclosure*): mahasiswa/pelajar mendapatkan istilah akademik (*Mata Kuliah*, *SKS*, *Pertemuan*), sedangkan profesional/lainnya mendapatkan istilah proyek (*Proyek*, *Bobot*, *Milestone*).
 
 ## Preferensi v6
 
@@ -102,8 +123,8 @@ Tugas masuk semester jika `dueDate` (atau `completedAt` / `createdAt` jika tidak
 
 ## Backup
 
-`createBackup()` menulis `version: 7` plus `courses`, `semester`, preferensi soundscape, dan histori distraksi sesi.
-`parseBackupPayload()` menerima array tugas mentah (legacy), backup v4, v5, v6, dan v7.
+`createBackup()` menulis `version: 8` plus `courses` (termasuk `meetings`), `semester`, preferensi soundscape, dan histori distraksi sesi.
+`parseBackupPayload()` menerima array tugas mentah (legacy), backup v4, v5, v6, v7, dan v8.
 
 ## Migrasi
 

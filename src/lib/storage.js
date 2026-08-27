@@ -16,8 +16,8 @@ const DATABASE_VERSION = 1;
 const STORE_NAME = 'workspace';
 const APP_RECORD_KEY = 'app-data';
 
-export const SCHEMA_VERSION = 7;
-export const BACKUP_VERSION = 7;
+export const SCHEMA_VERSION = 8;
+export const BACKUP_VERSION = 8;
 
 export const MAX_TASK_LENGTH = 120;
 export const MAX_CATEGORY_LENGTH = 32;
@@ -26,6 +26,9 @@ export const MAX_SUBTASKS = 12;
 export const MAX_COURSES = 24;
 export const MAX_COURSE_NAME = 48;
 export const MAX_COURSE_CODE = 16;
+export const MAX_MEETINGS = 32;
+export const MAX_MEETING_TITLE = 100;
+export const MAX_MEETING_NOTES = 300;
 export const MAX_SESSION_NOTE = 240;
 export const MAX_DISTRACTIONS = 100;
 export const MAX_URL_LENGTH = 300;
@@ -134,7 +137,28 @@ export function normalizeTask(raw, index = 0) {
     pinned: Boolean(raw.pinned),
     archived: Boolean(raw.archived),
     recurrence: RECURRENCE_OPTIONS.includes(raw.recurrence) ? raw.recurrence : 'none',
-    reminderOffsetHours: REMINDER_OFFSETS.includes(reminder) ? reminder : null
+    reminderOffsetHours: REMINDER_OFFSETS.includes(reminder) ? reminder : null,
+    meetingNumber: Number.isInteger(Number(raw.meetingNumber)) && Number(raw.meetingNumber) >= 1 && Number(raw.meetingNumber) <= MAX_MEETINGS ? Number(raw.meetingNumber) : null
+  };
+}
+
+export function normalizeMeeting(raw, index = 0) {
+  if (!raw || typeof raw !== 'object') return null;
+  const num = Number(raw.number);
+  const number = Number.isInteger(num) && num >= 1 && num <= MAX_MEETINGS ? num : index + 1;
+  const title = String(raw.title ?? '').trim().slice(0, MAX_MEETING_TITLE);
+  const driveUrl = (() => {
+    const value = String(raw.driveUrl ?? '').trim().slice(0, MAX_URL_LENGTH);
+    return value && /^https?:\/\//i.test(value) ? value : null;
+  })();
+  const notes = String(raw.notes ?? '').trim().slice(0, MAX_MEETING_NOTES);
+  return {
+    id: numberOr(raw.id, Date.now() + index),
+    number,
+    title,
+    driveUrl,
+    completed: Boolean(raw.completed),
+    notes
   };
 }
 
@@ -165,6 +189,7 @@ export function normalizeCourse(raw, index = 0) {
     lecturer: String(raw.lecturer ?? '').trim().slice(0, 48),
     sks: Number.isInteger(sks) && sks >= 1 && sks <= 8 ? sks : null,
     schedule: Array.isArray(raw.schedule) ? raw.schedule.map(normalizeScheduleSlot).filter(Boolean).slice(0, 8) : [],
+    meetings: Array.isArray(raw.meetings) ? raw.meetings.map(normalizeMeeting).filter(Boolean).slice(0, MAX_MEETINGS) : [],
     driveUrl: (() => {
       const value = String(raw.driveUrl ?? '').trim().slice(0, MAX_URL_LENGTH);
       return value && /^https?:\/\//i.test(value) ? value : null;

@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.2.0 - Academic Meeting Tracker & SKS Summary (schema v8)
+
+- **Tracker Pertemuan Kuliah (1–16)**: Mata kuliah dapat mengelola daftar pertemuan materi, checklist kesiapan belajar, link materi Google Drive per slide/topik, serta tombol generator 16 pertemuan otomatis (UTS di P8, UAS di P16).
+- **Integrasi Tugas & Meja Kerja Fokus**: Tugas dapat dihubungkan ke pertemuan spesifik (`meetingNumber`); link materi pertemuan otomatis muncul di meja kerja Focus Desk.
+- **Rekap Beban SKS Semester**: Ringkasan total SKS aktif dan jumlah mata kuliah tampil di Pengaturan dan Kalender.
+- **Role Contextual Adaptation**: Pengguna non-mahasiswa (Profesional / Lainnya) mendapatkan antarmuka yang otomatis beradaptasi menjadi Manajemen Proyek & Milestone, tetap tenang dan tanpa clutter jika tidak digunakan.
+- **Schema v8 & Migrasi Additive**: Database dan backup naik ke v8 secara backward-compatible tanpa menghapus data versi terdahulu.
+
 ## 5.1.3 - Streak freeze
 
 - Progress sekarang memiliki streak freeze per bulan kalender, dengan kuota maksimal tiga dan migrasi additive.
