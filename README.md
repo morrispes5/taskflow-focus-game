@@ -41,6 +41,8 @@ Beranda menampilkan misi yang paling masuk akal untuk dikerjakan berikutnya. Kam
 - XP, level, dan streak;
 - progres tugas berdasarkan mata kuliah atau proyek.
 
+Kartu Focus Run di Beranda selalu mengikuti tugas aktif terbaru. Jika semua tugas aktif sudah selesai, kartu tersebut berubah menjadi ajakan untuk meninjau tugas selesai terakhir. Jika belum ada tugas, kartu itu menjadi jalan cepat untuk membuat misi pertama.
+
 Jadi, saat membuka TaskFlow, kamu tidak perlu menatap daftar panjang tanpa arah. Cukup pilih satu langkah berikutnya.
 
 ### ✅ Task Board: tempat semua tugas berkumpul
@@ -56,19 +58,38 @@ Tambahkan tugas dengan cepat, lalu lengkapi jika dibutuhkan. Setiap tugas dapat 
 - tugas berulang harian atau mingguan;
 - pin, arsip, duplikat, dan pencarian.
 
+Link Drive atau link tugas yang disimpan dapat dibuka langsung dari label **tautan** pada task board maupun dari meja kerja Focus Run.
+
 Tugas besar bisa dipecah menjadi langkah kecil supaya lebih mudah dimulai.
 
 ### ⏱️ Focus Run: meja kerja untuk satu misi
 
 Focus Run adalah inti pengalaman TaskFlow. Pilih satu tugas, lalu beri perhatian penuh selama:
 
-- 25 menit;
-- 50 menit; atau
+- estimasi durasi tugas;
+- preset fokus; atau
 - durasi custom 5–180 menit.
 
-Saat sesi berjalan, kamu dapat menjeda sesi, kembali fokus setelah terdistraksi, mencatat distraksi secara manual, membuka brief tugas, melihat checklist, dan mengakses link materi yang diperlukan.
+Jika tugas memiliki estimasi, durasi itu dipakai sebagai durasi awal Focus Run. Preset hanya menjadi fallback ketika tugas belum memiliki estimasi.
 
-Setelah sesi selesai, TaskFlow memberikan recap durasi fokus, waktu di luar fokus, XP, dan langkah berikutnya. Timer tidak otomatis mengklaim tugas sebagai selesai—kamu tetap yang menentukan kapan pekerjaan itu benar-benar selesai.
+Saat sesi berjalan, kamu dapat menjeda sesi, kembali fokus setelah terdistraksi, mencatat distraksi secara manual, membuka brief tugas, melihat checklist, dan mengakses link materi yang diperlukan. TaskFlow juga akan menjeda sesi secara otomatis jika tab tidak terlihat selama beberapa menit agar waktu perangkat tidur atau tab lain tidak dihitung sebagai fokus.
+
+Jika pekerjaan selesai sebelum timer habis, tekan **Selesaikan tugas**. TaskFlow akan meminta konfirmasi; setelah dikonfirmasi, tugas ditandai selesai, timer berhenti, dan recap sesi disimpan. Jika timer mencapai target lebih dulu, tugas otomatis diselesaikan dan TaskFlow menampilkan ucapan selamat. Sesi yang hanya dijeda atau sedang terdistraksi dapat diakhiri tanpa menandai tugas sebagai selesai.
+
+Setelah sesi selesai, TaskFlow memberikan recap durasi fokus, waktu di luar fokus, XP, dan langkah berikutnya.
+
+### 🔍 Mode Review: kembali ke tugas yang sudah selesai
+
+Tugas yang sudah selesai tidak hilang begitu saja. Tekan tombol play pada tugas selesai, atau pilih ajakan review dari kartu Focus Run di Beranda, untuk membuka **Mode Review**.
+
+Mode Review berguna ketika kamu ingin:
+
+- membaca ulang catatan atau brief tugas;
+- memeriksa checklist dan hasil pekerjaan;
+- membuka kembali link Drive atau link tugas;
+- menjalankan timer review opsional untuk mengecek pekerjaan dengan tenang.
+
+Review tidak mengubah status tugas, tidak memberikan XP tambahan, dan tidak dihitung sebagai sesi Focus Run pada Analitik. Label review selalu ditampilkan agar jelas bahwa kamu sedang meninjau pekerjaan yang sudah selesai, bukan mengerjakan misi baru.
 
 ### 🎓 Workspace untuk pelajar dan mahasiswa
 
@@ -140,8 +161,9 @@ Angka-angka itu hanya penanda perjalananmu—bukan ukuran nilai dirimu.
 3. Tambahkan tugas pertama—bisa sesingkat “Baca bab 1” atau sedetail proyek lengkap.
 4. Tambahkan deadline, subtask, catatan, dan mata kuliah/proyek jika diperlukan.
 5. Pilih **Mulai Focus Run** pada satu tugas.
-6. Setelah bekerja, tandai langkah atau tugas yang benar-benar sudah selesai.
-7. Buka **Analitik** untuk melihat ritme dan progresmu.
+6. Saat tugas selesai, pilih **Selesaikan tugas** dan konfirmasi. Timer akan berhenti; jika target timer tercapai lebih dulu, tugas selesai otomatis.
+7. Buka kembali tugas selesai kapan saja lewat **Mode Review** untuk membaca catatan, checklist, atau tautannya tanpa menambah XP.
+8. Buka **Analitik** untuk melihat ritme dan progresmu.
 
 Tidak perlu langsung memasukkan seluruh hidupmu ke aplikasi. Mulai saja dari satu tugas.
 
