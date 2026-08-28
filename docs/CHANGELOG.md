@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.2.1 - Completed calendar agenda
+
+- Tugas yang sudah selesai tetap muncul pada agenda tanggal deadline dengan judul tercoret agar statusnya langsung terbaca.
+
 ## 5.2.0 - Academic Meeting Tracker & SKS Summary (schema v8)
 
 - **Tracker Pertemuan Kuliah (1–16)**: Mata kuliah dapat mengelola daftar pertemuan materi, checklist kesiapan belajar, link materi Google Drive per slide/topik, serta tombol generator 16 pertemuan otomatis (UTS di P8, UAS di P16).

@@ -513,6 +513,7 @@ textarea.input { min-height: 92px; padding-block: 11px; resize: vertical; }
 .agenda-list li, .countdown-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-bottom: 10px; border-bottom: 1px solid var(--color-line); font-size: 0.86rem; }
 .agenda-list li:last-child, .countdown-list li:last-child { border-bottom: 0; padding-bottom: 0; }
 .agenda-list em { color: var(--color-muted); font-style: normal; }
+.calendar-agenda .agenda-title-wrap strong.is-done { color: var(--color-muted); text-decoration: line-through; text-decoration-thickness: 1.5px; }
 .agenda-overdue { color: var(--color-coral); }
 .countdown-list span { margin-left: auto; color: var(--color-cobalt); font-weight: 780; }
 .course-progress-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 28px; }

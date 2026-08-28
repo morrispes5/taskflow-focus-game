@@ -269,6 +269,14 @@ describe('task domain', () => {
     expect(dayAgenda.some((item) => item.kind === 'task')).toBe(true);
   });
 
+  it('mempertahankan tugas selesai di agenda kalender dengan status completed', () => {
+    const dayAgenda = getAgendaForDay([
+      task({ id: 30, text: 'Matematika distrik', dueDate: '2026-08-30', completed: true, completedAt: new Date(2026, 7, 29).getTime() })
+    ], [], '2026-08-30');
+    expect(dayAgenda).toHaveLength(1);
+    expect(dayAgenda[0]).toMatchObject({ kind: 'task', title: 'Matematika distrik', completed: true });
+  });
+
   it('mengelola pertemuan kuliah, validasi input, progres, dan rekap SKS', () => {
     const meetings = generateDefaultMeetings('PBO', 'mahasiswa');
     expect(meetings).toHaveLength(16);
