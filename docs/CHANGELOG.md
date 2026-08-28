@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.2.2 - Focus Run completion and review
+
+- Menyelesaikan tugas saat Focus Run masih berjalan kini meminta konfirmasi, menghentikan timer, lalu menyimpan recap sesi secara konsisten.
+- Saat timer mencapai target, TaskFlow menandai tugas selesai dan menampilkan konfirmasi keberhasilan yang jelas.
+- Tugas yang sudah selesai dibuka sebagai mode review: timer opsional, sumber tugas tetap tersedia, dan tidak ada XP yang menyesatkan.
+- Tautan tugas pada Quest Board kini dapat diklik langsung; kartu Focus Run Beranda kini selalu mengarah ke misi aktif atau review tugas terakhir.
+
 ## 5.2.1 - Completed calendar agenda
 
 - Tugas yang sudah selesai tetap muncul pada agenda tanggal deadline dengan judul tercoret agar statusnya langsung terbaca.

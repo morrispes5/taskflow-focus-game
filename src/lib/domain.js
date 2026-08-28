@@ -171,11 +171,12 @@ export function getFocusControlAvailability(focus) {
   };
 }
 
-export function createActiveFocus(taskId, minutes, at = Date.now()) {
+export function createActiveFocus(taskId, minutes, at = Date.now(), mode = 'focus') {
   const startedAt = timestampOr(at);
   const plannedMinutes = Math.min(180, Math.max(5, Number(minutes) || 25));
   return {
     taskId,
+    mode: mode === 'review' ? 'review' : 'focus',
     plannedMinutes,
     breakMinutes: plannedMinutes >= 50 ? 10 : 5,
     status: 'focusing',
@@ -202,6 +203,7 @@ export function closeActiveFocusForReplacement(data, at = Date.now()) {
     sessions: [...sessions, {
       id: endedAt,
       taskId: closedFocus.taskId,
+      mode: closedFocus.mode === 'review' ? 'review' : 'focus',
       plannedMinutes: closedFocus.plannedMinutes,
       activeSeconds,
       status: 'abandoned',
@@ -216,10 +218,70 @@ export function closeActiveFocusForReplacement(data, at = Date.now()) {
   };
 }
 
-export function replaceActiveFocus(data, taskId, minutes, at = Date.now()) {
+export function finishFocusRun(data, { at = Date.now(), completeTask = false, startBreak = !completeTask } = {}) {
+  const focus = data?.activeFocus;
+  if (!focus || focus.status === 'break') {
+    return { data, session: null, activeSeconds: 0, sessionXp: 0, taskCompleted: false, isReview: false };
+  }
+  const endedAt = timestampOr(at);
+  const closedFocus = closeDistraction(focus, endedAt);
+  const activeSeconds = getFocusActiveSeconds(closedFocus, endedAt);
+  const distractionSeconds = getDistractionSummary(closedFocus, endedAt).totalSeconds;
+  const isReview = closedFocus.mode === 'review';
+  let next = data;
+  let taskCompleted = false;
+
+  if (completeTask && !isReview) {
+    const currentTask = next.tasks?.find((task) => task.id === closedFocus.taskId);
+    if (currentTask && !currentTask.completed) {
+      next = applyTaskToggle(next, currentTask.id, endedAt).data;
+      taskCompleted = true;
+    }
+  }
+
+  const sessionXp = isReview ? 0 : getSessionXp(activeSeconds, closedFocus.plannedMinutes);
+  const session = {
+    id: endedAt,
+    taskId: closedFocus.taskId,
+    mode: isReview ? 'review' : 'focus',
+    plannedMinutes: closedFocus.plannedMinutes,
+    activeSeconds,
+    status: 'completed',
+    startedAt: closedFocus.sessionStartedAt,
+    endedAt,
+    rewardApplied: !isReview,
+    note: '',
+    distractions: closedFocus.distractions,
+    distractionSeconds
+  };
+  const dateKey = todayString(new Date(endedAt));
+  const progress = isReview ? next.progress : applySessionReward(next.progress, activeSeconds, closedFocus.plannedMinutes, dateKey);
+  return {
+    data: {
+      ...next,
+      progress,
+      sessions: [...(Array.isArray(next.sessions) ? next.sessions : []), session],
+      activeFocus: {
+        ...closedFocus,
+        status: 'break',
+        activeSeconds,
+        runningSince: null,
+        breakEndsAt: startBreak ? endedAt + closedFocus.breakMinutes * 60000 : null,
+        sessionId: endedAt
+      }
+    },
+    session,
+    activeSeconds,
+    sessionXp,
+    taskCompleted,
+    isReview
+  };
+}
+
+export function replaceActiveFocus(data, taskId, minutes, at = Date.now(), mode = 'focus') {
   const startedAt = timestampOr(at);
   const cleared = closeActiveFocusForReplacement(data, startedAt);
-  return { ...cleared, activeFocus: createActiveFocus(taskId, minutes, startedAt) };
+  return { ...cleared, activeFocus: createActiveFocus(taskId, minutes, startedAt, mode) };
 }
 
 export function beginDistraction(focus, at = Date.now()) {
@@ -278,6 +340,10 @@ export function visibleTasks(tasks, { includeArchived = false } = {}) {
   return includeArchived ? tasks : tasks.filter((task) => !task.archived);
 }
 
+function isCompletedFocusSession(session) {
+  return session?.status === 'completed' && session?.mode !== 'review';
+}
+
 export function sortTasks(tasks, mode = 'newest') {
   return [...tasks].sort((a, b) => {
     if (a.pinned !== b.pinned) return Number(b.pinned) - Number(a.pinned);
@@ -323,6 +389,15 @@ export function selectDailyMission(tasks, reference = new Date()) {
   })[0] || null;
 }
 
+export function selectReviewTask(tasks) {
+  const completed = visibleTasks(tasks).filter((task) => task.completed);
+  return [...completed].sort((a, b) => {
+    const completedAtA = Number(a.completedAt || a.updatedAt || a.createdAt || 0);
+    const completedAtB = Number(b.completedAt || b.updatedAt || b.createdAt || 0);
+    return completedAtB - completedAtA;
+  })[0] || null;
+}
+
 export function getDashboardStats(tasks, progress, sessions, reference = new Date()) {
   const live = visibleTasks(tasks);
   const active = live.filter((task) => !task.completed);
@@ -334,7 +409,7 @@ export function getDashboardStats(tasks, progress, sessions, reference = new Dat
     dueToday: active.filter((task) => task.dueDate === today).length,
     overdue: active.filter((task) => isOverdue(task, reference)).length,
     completedWeek: completed.filter((task) => isCompletedThisWeek(task, reference)).length,
-    focusMinutes: Math.floor(sessions.filter((session) => session.status === 'completed').reduce((sum, session) => sum + session.activeSeconds, 0) / 60),
+    focusMinutes: Math.floor(sessions.filter(isCompletedFocusSession).reduce((sum, session) => sum + session.activeSeconds, 0) / 60),
     xp: progress.totalXp,
     level: progress.level,
     streak: progress.currentStreak
@@ -479,13 +554,14 @@ export function getAnalytics(tasks, sessions, courses = [], reference = new Date
   live.forEach((task) => { const key = getTaskLabel(task, courses) || 'Tanpa kategori'; categoryMap.set(key, (categoryMap.get(key) || 0) + 1); });
   const priority = ['high', 'medium', 'low'].map((key) => ({ label: PRIORITY_LABELS[key], key, count: live.filter((task) => task.priority === key).length })).filter((item) => item.count);
   const types = TASK_TYPES.map((key) => ({ label: TASK_TYPE_LABELS[key], key, count: live.filter((task) => task.type === key).length })).filter((item) => item.count);
-  const focusMinutes = Math.floor(scopedSessions.filter((session) => session.status === 'completed').reduce((sum, session) => sum + session.activeSeconds, 0) / 60);
-  const distractions = scopedSessions.reduce((sum, session) => sum + (Number(session.distractions?.length) || 0), 0);
-  const distractionMinutes = Math.floor(scopedSessions.reduce((sum, session) => sum + (Number(session.distractionSeconds) || 0), 0) / 60);
+  const completedFocusSessions = scopedSessions.filter(isCompletedFocusSession);
+  const focusMinutes = Math.floor(completedFocusSessions.reduce((sum, session) => sum + session.activeSeconds, 0) / 60);
+  const distractions = completedFocusSessions.reduce((sum, session) => sum + (Number(session.distractions?.length) || 0), 0);
+  const distractionMinutes = Math.floor(completedFocusSessions.reduce((sum, session) => sum + (Number(session.distractionSeconds) || 0), 0) / 60);
   const days = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(startOfWeek(reference, { weekStartsOn: 1 }), index);
     const key = todayString(date);
-    return { key, label: format(date, 'EEE'), completed: completed.filter((task) => task.completedAt && todayString(new Date(task.completedAt)) === key).length, focus: Math.floor(scopedSessions.filter((session) => session.status === 'completed' && session.endedAt && todayString(new Date(session.endedAt)) === key).reduce((sum, session) => sum + session.activeSeconds, 0) / 60) };
+    return { key, label: format(date, 'EEE'), completed: completed.filter((task) => task.completedAt && todayString(new Date(task.completedAt)) === key).length, focus: Math.floor(completedFocusSessions.filter((session) => session.endedAt && todayString(new Date(session.endedAt)) === key).reduce((sum, session) => sum + session.activeSeconds, 0) / 60) };
   });
   return {
     scope: useSemester ? 'semester' : 'all',
@@ -497,7 +573,7 @@ export function getAnalytics(tasks, sessions, courses = [], reference = new Date
     onTimeCount: onTime.length,
     withDeadline: live.filter((task) => task.dueDate).length,
     focusMinutes,
-    sessionsCompleted: scopedSessions.filter((session) => session.status === 'completed').length,
+    sessionsCompleted: completedFocusSessions.length,
     distractions,
     distractionMinutes,
     category: [...categoryMap.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count })),
@@ -788,7 +864,7 @@ export function applyTaskToggle(data, taskId, now = Date.now()) {
   }
   if (!completed) tasks = tasks.map((task) => task.id === taskId ? { ...task, archived: false } : task);
   let progress = data.progress;
-  const dateKey = todayString();
+  const dateKey = todayString(new Date(now));
   const canReward = completed && !progress.rewardedTaskIds.includes(currentTarget.id);
   const streakFreezeInfo = canReward ? getStreakFreezeInfo(progress, dateKey) : null;
   if (completed) progress = applyTaskCompletionReward(progress, currentTarget, dateKey);

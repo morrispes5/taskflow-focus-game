@@ -138,7 +138,9 @@ describe('storage migration', () => {
     expect(migrated.schemaVersion).toBe(8);
     expect(migrated.sessions[0].distractions).toEqual([]);
     expect(migrated.sessions[0].distractionSeconds).toBe(0);
+    expect(migrated.sessions[0].mode).toBe('focus');
     expect(migrated.activeFocus.status).toBe('distracted');
+    expect(migrated.activeFocus.mode).toBe('focus');
     expect(migrated.activeFocus.runningSince).toBeNull();
     expect(migrated.activeFocus.distractions[0].startedAt).toBe(1000);
     expect(migrated.activeFocus.distractions[0].endedAt).toBeNull();
@@ -152,6 +154,16 @@ describe('storage migration', () => {
     });
     expect(migrated.activeFocus.runningSince).toBe(1000);
     expect(migrated.activeFocus.activeSeconds).toBe(42);
+  });
+
+  it('mempertahankan mode review secara additive pada sesi dan fokus aktif', () => {
+    const migrated = normalizeAppData({
+      tasks: [{ id: 4, text: 'Tugas selesai', completed: true, createdAt: 10 }],
+      sessions: [{ id: 30, taskId: 4, mode: 'review', plannedMinutes: 15, activeSeconds: 120, status: 'completed', startedAt: 10, endedAt: 100, rewardApplied: false }],
+      activeFocus: { taskId: 4, mode: 'review', plannedMinutes: 15, breakMinutes: 5, status: 'paused', activeSeconds: 120, sessionStartedAt: 10 }
+    });
+    expect(migrated.sessions[0].mode).toBe('review');
+    expect(migrated.activeFocus.mode).toBe('review');
   });
 
   it('menyimpan folder materi dan backup v6', async () => {

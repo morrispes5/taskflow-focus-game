@@ -32,7 +32,7 @@ export function TaskRow({ task, courses = [], onToggle, onEdit, onDelete, onPin,
           )}
           <span className="task-estimate"><Clock3 size={12} aria-hidden="true" />{task.estimateMinutes} m fokus</span>
           {sub.total > 0 && <span className="task-subtasks">{sub.done}/{sub.total} langkah</span>}
-          {task.url && <span className="task-link"><Paperclip size={12} />tautan</span>}
+          {task.url && <a className="task-link" href={task.url} target="_blank" rel="noreferrer" aria-label={`Buka tautan tugas: ${task.text}`} title="Buka tautan tugas"><Paperclip size={12} />tautan</a>}
           {task.recurrence !== 'none' && <span className="task-repeat">{task.recurrence === 'daily' ? 'Harian' : 'Mingguan'}</span>}
           <span className="task-reward"><Zap size={12} aria-hidden="true" />+{getTaskXp(task)} XP</span>
         </div>

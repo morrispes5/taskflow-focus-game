@@ -92,7 +92,7 @@ Sesi fokus lama tetap valid. Field baru bersifat additive:
 
 ```js
 Session = {
-  id, taskId, plannedMinutes, activeSeconds,
+  id, taskId, mode: 'focus' | 'review', plannedMinutes, activeSeconds,
   status: 'completed' | 'abandoned',
   startedAt, endedAt, rewardApplied, note,
   distractions: Distraction[],
@@ -107,7 +107,7 @@ Distraction = {
 }
 ```
 
-`activeFocus.status` menerima `focusing`, `paused`, `distracted`, atau `break`. Ketika status `distracted`, `activeSeconds` dan timer berhenti; `distractionStartedAt` menyimpan event yang sedang terbuka. Jeda sesi tidak dihitung sebagai distraksi.
+`activeFocus.status` menerima `focusing`, `paused`, `distracted`, atau `break`; `activeFocus.mode` menerima `focus` (default untuk data lama) atau `review`. Mode `review` dipakai saat pengguna membuka tugas yang sudah selesai: timer tetap opsional, tetapi tidak memberi XP atau mengubah status tugas. Ketika status `distracted`, `activeSeconds` dan timer berhenti; `distractionStartedAt` menyimpan event yang sedang terbuka. Jeda sesi tidak dihitung sebagai distraksi.
 
 Tracker ini manual. TaskFlow tidak mendeteksi atau membaca aplikasi/tab lain, dan waktu distraksi tidak dihitung sebagai waktu fokus aktif.
 

@@ -232,6 +232,7 @@ export function normalizeSession(raw) {
   return {
     id: numberOr(raw.id, Date.now()),
     taskId: numberOr(raw.taskId, 0),
+    mode: raw.mode === 'review' ? 'review' : 'focus',
     plannedMinutes: Math.max(1, numberOr(raw.plannedMinutes, 25)),
     activeSeconds: Math.max(0, numberOr(raw.activeSeconds, 0)),
     status,
@@ -276,6 +277,7 @@ export function normalizeActiveFocus(raw) {
     : null;
   return {
     taskId: numberOr(raw.taskId, 0),
+    mode: raw.mode === 'review' ? 'review' : 'focus',
     plannedMinutes: Math.max(1, numberOr(raw.plannedMinutes, 25)),
     breakMinutes: Math.max(1, numberOr(raw.breakMinutes, 5)),
     status,

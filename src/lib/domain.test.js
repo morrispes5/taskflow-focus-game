@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { addDays } from 'date-fns';
 import {
-  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
+  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, finishFocusRun, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDashboardStats, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
   getProfileRecommendations, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
-  getSemesterWeek, replaceActiveFocus, resumeDistraction, selectDailyMission, sortTasks, spawnNextOccurrence, todayString, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput,
+  getSemesterWeek, replaceActiveFocus, resumeDistraction, selectDailyMission, selectReviewTask, sortTasks, spawnNextOccurrence, todayString, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput,
   validateMeetingInput, generateDefaultMeetings, getSemesterSksSummary, getCourseMeetingsProgress, getRoleTerminology
 } from './domain.js';
 import { createEmptyAppData } from './storage.js';
@@ -45,6 +45,16 @@ describe('task domain', () => {
       task({ id: 2, text: 'Dipin', pinned: true, priority: 'low' })
     ], reference);
     expect(mission.text).toBe('Dipin');
+  });
+
+  it('memilih tugas selesai terbaru untuk mode review dan mengabaikan arsip', () => {
+    const review = selectReviewTask([
+      task({ id: 1, text: 'Selesai lama', completed: true, completedAt: 100 }),
+      task({ id: 2, text: 'Selesai terbaru', completed: true, completedAt: 200 }),
+      task({ id: 3, text: 'Arsip', completed: true, archived: true, completedAt: 300 })
+    ]);
+    expect(review).toMatchObject({ id: 2, text: 'Selesai terbaru', completed: true });
+    expect(selectReviewTask([task({ completed: true, archived: true })])).toBeNull();
   });
 
   it('memfilter status, prioritas, kategori, pencarian, tipe, dan mata kuliah', () => {
@@ -150,6 +160,37 @@ describe('task domain', () => {
     const cleared = closeActiveFocusForReplacement(data, 120000);
     expect(cleared.sessions).toEqual(data.sessions);
     expect(cleared.activeFocus).toBeNull();
+  });
+
+  it('menyelesaikan tugas dari Focus Run sekaligus menghentikan timer dan menyimpan recap', () => {
+    const data = {
+      ...createEmptyAppData(),
+      tasks: [task({ id: 12, text: 'Laporan sains', priority: 'medium' })],
+      activeFocus: createActiveFocus(12, 5, 100000)
+    };
+    const result = finishFocusRun(data, { at: 220000, completeTask: true });
+    expect(result.taskCompleted).toBe(true);
+    expect(result.data.tasks[0]).toMatchObject({ id: 12, completed: true, completedAt: 220000 });
+    expect(result.data.activeFocus).toMatchObject({ status: 'break', activeSeconds: 120, runningSince: null, breakEndsAt: null });
+    expect(result.data.sessions[0]).toMatchObject({ taskId: 12, mode: 'focus', status: 'completed', rewardApplied: true, activeSeconds: 120 });
+    expect(result.data.progress.totalXp).toBe(18);
+  });
+
+  it('merekam review tanpa menambah XP atau metrik Focus Run', () => {
+    const data = {
+      ...createEmptyAppData(),
+      tasks: [task({ id: 15, text: 'Tugas final', completed: true, completedAt: 50 })],
+      progress: { ...createEmptyAppData().progress, totalXp: 42 },
+      activeFocus: createActiveFocus(15, 5, 100000, 'review')
+    };
+    const result = finishFocusRun(data, { at: 700000 });
+    expect(result).toMatchObject({ isReview: true, taskCompleted: false, sessionXp: 0 });
+    expect(result.data.sessions[0]).toMatchObject({ taskId: 15, mode: 'review', status: 'completed', rewardApplied: false });
+    expect(result.data.progress.totalXp).toBe(42);
+    expect(getDashboardStats(data.tasks, data.progress, [
+      { status: 'completed', mode: 'focus', activeSeconds: 600 },
+      result.data.sessions[0]
+    ]).focusMinutes).toBe(10);
   });
 
   it('membawa jejak distraksi ke analitik sesi', () => {
