@@ -1,7 +1,8 @@
-import { IDBFactory } from 'fake-indexeddb';
+import { IDBFactory, IDBObjectStore } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import {
-  STORAGE_KEYS, createEmptyAppData, createWorkspaceStore, normalizeAppData, normalizeProgress, normalizeTask, parseBackupPayload
+  STORAGE_KEYS, MAX_BACKUP_FILE_BYTES, MAX_IMPORT_SESSIONS, MAX_IMPORT_TASKS, WorkspaceConflictError,
+  createBackup, createEmptyAppData, createWorkspaceStore, normalizeAppData, normalizeProgress, normalizeTask, parseBackupPayload, validateBackupFile
 } from './storage.js';
 
 function createStorage(initial = {}) {
@@ -14,11 +15,10 @@ function createStorage(initial = {}) {
   };
 }
 
-function createStore(storage = createStorage()) {
-  const indexedDb = new IDBFactory();
+function createStore(storage = createStorage(), indexedDb = new IDBFactory(), databaseName = `taskflow-test-${crypto.randomUUID()}`) {
   return {
     storage,
-    store: createWorkspaceStore({ indexedDb, storage, databaseName: `taskflow-test-${crypto.randomUUID()}` })
+    store: createWorkspaceStore({ indexedDb, storage, databaseName })
   };
 }
 
@@ -41,13 +41,14 @@ describe('storage migration', () => {
 
   it('memulai browser baru dengan workspace kosong dan onboarding profil', async () => {
     const { store } = createStore();
-    const data = await store.load();
-    expect(data.tasks).toEqual([]);
-    expect(data.profile.name).toBe('');
-    expect(data.onboarding.profileCompleted).toBe(false);
+    const snapshot = await store.load();
+    expect(snapshot.data.tasks).toEqual([]);
+    expect(snapshot.data.profile.name).toBe('');
+    expect(snapshot.data.onboarding.profileCompleted).toBe(false);
+    expect(snapshot.revision).toBe(1);
   });
 
-  it('menghapus semua data legacy termasuk tiga task demo Android sekali saat migrasi', async () => {
+  it('memigrasikan semua data legacy saat IndexedDB kosong lalu baru membersihkan key lama', async () => {
     const storage = createStorage({
       [STORAGE_KEYS.tasks]: JSON.stringify([
         { id: 1, text: 'Buat wireframe halaman Focus Run', completed: false },
@@ -55,26 +56,65 @@ describe('storage migration', () => {
         { id: 3, text: 'Pelajari struktur HTML dan CSS', completed: true }
       ]),
       [STORAGE_KEYS.username]: 'Vio',
-      [STORAGE_KEYS.progress]: JSON.stringify({ totalXp: 20 })
+      [STORAGE_KEYS.tagline]: 'Pelan-pelan selesai',
+      [STORAGE_KEYS.progress]: JSON.stringify({ totalXp: 20 }),
+      [STORAGE_KEYS.sessions]: JSON.stringify([{ id: 7, taskId: 1, status: 'completed', activeSeconds: 600, startedAt: 1, endedAt: 601 }]),
+      [STORAGE_KEYS.preferences]: JSON.stringify({ theme: 'dark', sound: false })
     });
     const { store } = createStore(storage);
 
-    const data = await store.load();
+    const { data } = await store.load();
 
-    expect(data.tasks).toEqual([]);
-    expect(data.profile.name).toBe('');
-    expect(data.onboarding.profileCompleted).toBe(false);
+    expect(data.tasks).toHaveLength(3);
+    expect(data.tasks[0].text).toBe('Buat wireframe halaman Focus Run');
+    expect(data.profile).toMatchObject({ name: 'Vio', tagline: 'Pelan-pelan selesai' });
+    expect(data.progress.totalXp).toBe(20);
+    expect(data.sessions).toHaveLength(1);
+    expect(data.preferences).toMatchObject({ theme: 'dark', sound: false });
+    expect(data.onboarding.profileCompleted).toBe(true);
     Object.values(STORAGE_KEYS).forEach((key) => expect(storage.has(key)).toBe(false));
+  });
+
+  it('mempertahankan semua key legacy jika transaksi migrasi gagal', async () => {
+    const storage = createStorage({
+      [STORAGE_KEYS.tasks]: JSON.stringify([{ id: 1, text: 'Data jangan hilang', completed: false }]),
+      [STORAGE_KEYS.username]: 'Vio'
+    });
+    const { store } = createStore(storage);
+    const originalPut = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function putWithFailure(value, key) {
+      if (key === 'app-data') throw new Error('Simulasi write failure');
+      return originalPut.call(this, value, key);
+    };
+    try {
+      await expect(store.load()).rejects.toThrow('Data aslinya tetap aman');
+      expect(storage.has(STORAGE_KEYS.tasks)).toBe(true);
+      expect(storage.has(STORAGE_KEYS.username)).toBe(true);
+    } finally {
+      IDBObjectStore.prototype.put = originalPut;
+    }
+  });
+
+  it('mempertahankan key legacy dan memberi pesan pemulihan jika JSON lama rusak', async () => {
+    const storage = createStorage({
+      [STORAGE_KEYS.tasks]: '[JSON rusak',
+      [STORAGE_KEYS.username]: 'Vio'
+    });
+    const { store } = createStore(storage);
+
+    await expect(store.load()).rejects.toThrow('Data aslinya tetap aman');
+    expect(storage.has(STORAGE_KEYS.tasks)).toBe(true);
+    expect(storage.has(STORAGE_KEYS.username)).toBe(true);
   });
 
   it('mengingat workspace baru pada browser yang sama tanpa menyentuh perangkat lain', async () => {
     const first = createStore();
     const initial = await first.store.load();
-    await first.store.save({ ...initial, profile: { ...initial.profile, name: 'Naya', role: 'mahasiswa', goal: 'Menyusun makalah' }, onboarding: { ...initial.onboarding, profileCompleted: true }, tasks: [{ id: 9, text: 'Cari referensi', createdAt: 1, completed: false }] });
+    await first.store.save({ ...initial.data, profile: { ...initial.data.profile, name: 'Naya', role: 'mahasiswa', goal: 'Menyusun makalah' }, onboarding: { ...initial.data.onboarding, profileCompleted: true }, tasks: [{ id: 9, text: 'Cari referensi', createdAt: 1, completed: false }] }, initial.revision);
 
-    const remembered = await first.store.load();
+    const remembered = (await first.store.load()).data;
     const other = createStore();
-    const otherDevice = await other.store.load();
+    const otherDevice = (await other.store.load()).data;
 
     expect(remembered.profile.name).toBe('Naya');
     expect(remembered.tasks).toHaveLength(1);
@@ -85,12 +125,12 @@ describe('storage migration', () => {
   it('mengosongkan workspace dari Pengaturan dan meminta profil lagi', async () => {
     const { store } = createStore();
     const initial = await store.load();
-    await store.save({ ...initial, profile: { ...initial.profile, name: 'Naya', role: 'mahasiswa', goal: 'Menyusun makalah' }, onboarding: { ...initial.onboarding, profileCompleted: true }, tasks: [{ id: 9, text: 'Cari referensi', createdAt: 1, completed: false }] });
+    const saved = await store.save({ ...initial.data, profile: { ...initial.data.profile, name: 'Naya', role: 'mahasiswa', goal: 'Menyusun makalah' }, onboarding: { ...initial.data.onboarding, profileCompleted: true }, tasks: [{ id: 9, text: 'Cari referensi', createdAt: 1, completed: false }] }, initial.revision);
 
-    const reset = await store.reset();
+    const reset = await store.reset(saved.revision);
 
-    expect(reset).toEqual(createEmptyAppData());
-    expect((await store.load()).tasks).toEqual([]);
+    expect(reset.data).toEqual(createEmptyAppData());
+    expect((await store.load()).data.tasks).toEqual([]);
   });
 
   it('menerima backup lama berbentuk array tanpa membuat profil palsu', () => {
@@ -109,12 +149,12 @@ describe('storage migration', () => {
     const { store } = createStore();
     const initial = await store.load();
     await store.save({
-      ...initial,
-      profile: { ...initial.profile, name: 'Vio', role: 'mahasiswa', goal: 'Ujian' },
-      onboarding: { ...initial.onboarding, profileCompleted: true },
+      ...initial.data,
+      profile: { ...initial.data.profile, name: 'Vio', role: 'mahasiswa', goal: 'Ujian' },
+      onboarding: { ...initial.data.onboarding, profileCompleted: true },
       tasks: [{ id: 4, text: 'Tugas lama', completed: false, createdAt: 10, updatedAt: 10, priority: 'high', category: 'Kuliah', estimateMinutes: 50 }]
-    });
-    const migrated = await store.load();
+    }, initial.revision);
+    const migrated = (await store.load()).data;
     expect(migrated.schemaVersion).toBe(8);
     expect(migrated.tasks).toHaveLength(1);
     expect(migrated.tasks[0].text).toBe('Tugas lama');
@@ -170,14 +210,14 @@ describe('storage migration', () => {
     const { store } = createStore();
     const initial = await store.load();
     const saved = await store.save({
-      ...initial,
+      ...initial.data,
       courses: [{ id: 1, name: 'PBO', code: 'IF201', color: '#2864f0', driveUrl: 'https://drive.google.com/pbo', schedule: [{ day: 1, start: '08:00', end: '10:00', room: 'A1' }] }],
       tasks: [{ id: 2, text: 'PR PBO', courseId: 1, type: 'tugas', dueDate: '2026-09-01', dueTime: '23:59' }]
-    });
-    expect(saved.courses[0].name).toBe('PBO');
-    expect(saved.courses[0].driveUrl).toBe('https://drive.google.com/pbo');
-    expect(saved.tasks[0].courseId).toBe(1);
-    const backup = parseBackupPayload({ version: 6, tasks: saved.tasks, courses: saved.courses, preferences: { focusSoundscape: 'rain', focusSoundVolume: 120 } });
+    }, initial.revision);
+    expect(saved.data.courses[0].name).toBe('PBO');
+    expect(saved.data.courses[0].driveUrl).toBe('https://drive.google.com/pbo');
+    expect(saved.data.tasks[0].courseId).toBe(1);
+    const backup = parseBackupPayload({ version: 6, tasks: saved.data.tasks, courses: saved.data.courses, preferences: { focusSoundscape: 'rain', focusSoundVolume: 120 } });
     expect(backup.courses).toHaveLength(1);
     expect(backup.tasks[0].dueTime).toBe('23:59');
     expect(backup.preferences.focusSoundscape).toBe('rain');
@@ -219,5 +259,75 @@ describe('storage migration', () => {
     expect(backupV8.courses[0].meetings[0].completed).toBe(true);
     expect(backupV8.courses[0].meetings[0].driveUrl).toBe('https://drive.google.com/erd');
     expect(backupV8.tasks[0].meetingNumber).toBe(1);
+  });
+
+  it('menjadikan record IndexedDB authoritative saat key legacy muncul kembali', async () => {
+    const storage = createStorage();
+    const { store } = createStore(storage);
+    const initial = await store.load();
+    const saved = await store.save({
+      ...initial.data,
+      tasks: [{ id: 9, text: 'Data IndexedDB', completed: false, createdAt: 1 }]
+    }, initial.revision);
+    storage.setItem(STORAGE_KEYS.tasks, JSON.stringify([{ id: 10, text: 'Data legacy stale', completed: false }]));
+
+    const loaded = await store.load();
+
+    expect(loaded.data.tasks[0].text).toBe('Data IndexedDB');
+    expect(loaded.revision).toBe(saved.revision);
+    expect(storage.has(STORAGE_KEYS.tasks)).toBe(true);
+  });
+
+  it('menolak file dan koleksi backup yang melewati batas sebelum mengganti workspace', () => {
+    expect(validateBackupFile({ size: MAX_BACKUP_FILE_BYTES })).toEqual({ size: MAX_BACKUP_FILE_BYTES });
+    expect(() => validateBackupFile({ size: MAX_BACKUP_FILE_BYTES + 1 })).toThrow('maksimal 10 MB');
+    expect(() => parseBackupPayload({ tasks: Array.from({ length: MAX_IMPORT_TASKS + 1 }, (_, id) => ({ id, text: `Tugas ${id}` })) })).toThrow('2.000 tugas');
+    expect(() => parseBackupPayload({ tasks: [], focusSessions: Array.from({ length: MAX_IMPORT_SESSIONS + 1 }, () => ({})) })).toThrow('10.000 sesi fokus');
+  });
+
+  it('menolak silent last-write-wins dan write lama setelah reset', async () => {
+    const indexedDb = new IDBFactory();
+    const databaseName = `taskflow-shared-${crypto.randomUUID()}`;
+    const first = createStore(createStorage(), indexedDb, databaseName).store;
+    const second = createStore(createStorage(), indexedDb, databaseName).store;
+    const firstSnapshot = await first.load();
+    const staleSnapshot = await second.load();
+    const saved = await first.save({
+      ...firstSnapshot.data,
+      tasks: [{ id: 1, text: 'Perubahan tab pertama', completed: false, createdAt: 1 }]
+    }, firstSnapshot.revision);
+
+    await expect(second.save({
+      ...staleSnapshot.data,
+      tasks: [{ id: 2, text: 'Snapshot lama', completed: false, createdAt: 2 }]
+    }, staleSnapshot.revision)).rejects.toBeInstanceOf(WorkspaceConflictError);
+    expect((await second.load()).data.tasks[0].text).toBe('Perubahan tab pertama');
+
+    const reset = await first.reset(saved.revision);
+    await expect(second.save(saved.data, staleSnapshot.revision)).rejects.toBeInstanceOf(WorkspaceConflictError);
+    expect(reset.revision).toBe(saved.revision + 1);
+    expect((await second.load()).data.tasks).toEqual([]);
+  });
+
+  it('mempertahankan data penting pada round-trip export dan import v8', () => {
+    const original = normalizeAppData({
+      tasks: [{ id: 1, text: 'Tugas penting', completed: false, createdAt: 10 }],
+      courses: [{ id: 2, name: 'Keamanan Web' }],
+      profile: { name: 'Vio', role: 'mahasiswa', goal: 'Lulus tepat waktu', tagline: 'Tetap fokus' },
+      progress: { totalXp: 240, currentStreak: 4, bestStreak: 7 },
+      sessions: [{ id: 3, taskId: 1, status: 'completed', activeSeconds: 1500, startedAt: 10, endedAt: 1510 }],
+      preferences: { theme: 'dark', sound: false },
+      onboarding: { profileCompleted: true, tutorialCompleted: true }
+    });
+
+    const restored = parseBackupPayload(JSON.parse(JSON.stringify(createBackup(original))));
+
+    expect(restored.tasks).toEqual(original.tasks);
+    expect(restored.courses).toEqual(original.courses);
+    expect(restored.profile).toEqual(original.profile);
+    expect(restored.progress).toEqual(original.progress);
+    expect(restored.sessions).toEqual(original.sessions);
+    expect(restored.preferences).toEqual(original.preferences);
+    expect(restored.onboarding).toEqual(original.onboarding);
   });
 });

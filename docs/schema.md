@@ -2,7 +2,7 @@
 
 `schemaVersion` saat ini: **8**
 IndexedDB: `taskflow_workspace` / object store `workspace` / record key `app-data`  
-Object store version tetap `1`. Yang berubah hanya isi record.
+Metadata internal disimpan terpisah pada record key `workspace-meta` dengan bentuk `{ revision: number }`. Object store version tetap `1` dan metadata ini tidak masuk backup pengguna.
 
 ## Record workspace
 
@@ -126,11 +126,18 @@ Tugas masuk semester jika `dueDate` (atau `completedAt` / `createdAt` jika tidak
 `createBackup()` menulis `version: 8` plus `courses` (termasuk `meetings`), `semester`, preferensi soundscape, dan histori distraksi sesi.
 `parseBackupPayload()` menerima array tugas mentah (legacy), backup v4, v5, v6, v7, dan v8.
 
+Import memeriksa ukuran file sebelum membaca isinya: maksimal 10 MB, 2.000 tugas, dan 10.000 sesi fokus. Data di atas batas ditolak seluruhnya tanpa truncation dan tanpa mengganti workspace aktif. Batas ini hanya berlaku pada import; workspace ongoing tidak dipangkas.
+
 ## Migrasi
 
 `load()`:
 
 1. Jika record IndexedDB ada → `normalizeAppData(stored)` (additive).
-2. Jika tidak ada → hapus key `localStorage` legacy TaskFlow, tulis workspace kosong.
+2. Jika IndexedDB kosong dan `localStorage` legacy ada → parse dan normalisasi semua data legacy, tulis ke IndexedDB, lalu hapus key legacy hanya setelah transaksi sukses.
+3. Jika IndexedDB dan data legacy sama-sama kosong → tulis workspace kosong.
 
-Jangan menambah wipe di jalur (1). Itu merusak pengguna yang sudah onboarding.
+Kegagalan parse atau write pada jalur (2) mempertahankan seluruh key legacy dan menampilkan pesan pemulihan. Jangan menambah wipe di jalur (1); record IndexedDB selalu authoritative.
+
+## Revision dan multi-tab
+
+Save, import, dan reset melewati satu write queue di aplikasi. Setiap save membandingkan expected revision dengan `workspace-meta` dalam transaksi yang sama dengan penulisan `app-data`. Snapshot stale ditolak; tab memuat data terbaru dan meminta pengguna mengulangi aksi, bukan menimpa atau melakukan auto-rebase diam-diam. Reset juga menulis workspace kosong dan menaikkan revision dalam satu transaksi, sehingga write lama tidak dapat menghidupkan data sebelum reset. `BroadcastChannel` mengirim `{ type, revision }`; string `updated` lama tetap diterima selama rollout lintas versi.

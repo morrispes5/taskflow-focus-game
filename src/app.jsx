@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MotionConfig } from 'motion/react';
-import { loadAppData, saveAppData, resetAppData } from './lib/storage.js';
+import { loadAppData, saveAppData, resetAppData, WorkspaceConflictError } from './lib/storage.js';
 import { applyTaskToggle, resolveTheme } from './lib/domain.js';
 import { getDueReminders, markRemindersNotified, sendNotification } from './lib/reminders.js';
 import { playFeedbackTone } from './lib/audio.js';
@@ -23,16 +23,19 @@ export default function TaskFlowApp() {
   const [tourOpen, setTourOpen] = useState(false);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.('(prefers-color-scheme: dark)').matches);
   const dataRef = useRef(data);
+  const revisionRef = useRef(0);
   const saveQueueRef = useRef(Promise.resolve());
   const workspaceChannelRef = useRef(null);
 
   const hydrate = useCallback(async () => {
     try {
       setStorageError(null);
-      const initial = await loadAppData();
-      dataRef.current = initial;
-      setData(initial);
-      setTourOpen(initial.onboarding.profileCompleted && !initial.onboarding.tutorialCompleted && !initial.onboarding.tutorialSkipped);
+      const snapshot = await loadAppData();
+      revisionRef.current = snapshot.revision;
+      dataRef.current = snapshot.data;
+      setData(snapshot.data);
+      setTourOpen(snapshot.data.onboarding.profileCompleted && !snapshot.data.onboarding.tutorialCompleted && !snapshot.data.onboarding.tutorialSkipped);
+      return snapshot;
     } catch (error) {
       setStorageError(error.message || 'Data TaskFlow tidak dapat dibuka di browser ini.');
     }
@@ -41,24 +44,45 @@ export default function TaskFlowApp() {
   useEffect(() => { hydrate(); }, [hydrate]);
 
   const commit = useCallback((updater, message = '', feedback = null) => {
-    if (!dataRef.current) return;
-    const next = updater(dataRef.current);
-    dataRef.current = next;
-    setData(next);
-    saveQueueRef.current = saveQueueRef.current.catch(() => undefined).then(() => saveAppData(next));
-    saveQueueRef.current.then(() => {
+    if (!dataRef.current) return Promise.resolve(null);
+    const operation = saveQueueRef.current.catch(() => undefined).then(async () => {
+      const base = { data: dataRef.current, revision: revisionRef.current };
+      const next = updater(base.data);
+      let saved;
+      try {
+        saved = await saveAppData(next, base.revision);
+      } catch (error) {
+        if (!(error instanceof WorkspaceConflictError)) throw error;
+        const latest = await loadAppData();
+        revisionRef.current = latest.revision;
+        dataRef.current = latest.data;
+        setData(latest.data);
+        throw new WorkspaceConflictError();
+      }
+      revisionRef.current = saved.revision;
+      dataRef.current = saved.data;
+      setData(saved.data);
+      setStorageError(null);
       window.dispatchEvent(new CustomEvent('taskflow:data-changed'));
-      workspaceChannelRef.current?.postMessage('updated');
-    }).catch((error) => setStorageError(error.message || 'Perubahan belum dapat disimpan.'));
-    if (message) setNotice({ id: Date.now(), text: message });
-    if (feedback && next.preferences.sound) playFeedbackTone(feedback, next.preferences.focusSoundVolume);
+      workspaceChannelRef.current?.postMessage({ type: 'workspace-updated', revision: saved.revision });
+      if (message) setNotice({ id: Date.now(), text: message });
+      if (feedback && saved.data.preferences.sound) playFeedbackTone(feedback, saved.data.preferences.focusSoundVolume);
+      return saved;
+    });
+    saveQueueRef.current = operation.catch((error) => {
+      setStorageError(error.message || 'Perubahan belum dapat disimpan.');
+    });
+    return operation;
   }, []);
 
   useEffect(() => {
     if (!('BroadcastChannel' in window)) return undefined;
     const channel = new BroadcastChannel('taskflow-workspace');
     workspaceChannelRef.current = channel;
-    channel.onmessage = () => hydrate();
+    channel.onmessage = (event) => {
+      const incomingRevision = Number(event.data?.revision);
+      if (event.data === 'updated' || !Number.isSafeInteger(incomingRevision) || incomingRevision > revisionRef.current) hydrate();
+    };
     return () => { workspaceChannelRef.current = null; channel.close(); };
   }, [hydrate]);
 
@@ -103,8 +127,8 @@ export default function TaskFlowApp() {
   const toggleTask = useCallback((taskId) => {
     if (!dataRef.current) return;
     const wasCompleted = dataRef.current.tasks.find((task) => task.id === taskId)?.completed;
-    const { data: next, message } = applyTaskToggle(dataRef.current, taskId);
-    commit(() => next, message, wasCompleted ? null : 'complete');
+    const { message } = applyTaskToggle(dataRef.current, taskId);
+    commit((current) => applyTaskToggle(current, taskId).data, message, wasCompleted ? null : 'complete');
   }, [commit]);
 
   const updatePreferences = (preferences) => commit((current) => ({ ...current, preferences: { ...current.preferences, ...preferences } }));
@@ -133,14 +157,28 @@ export default function TaskFlowApp() {
   };
 
   const resetWorkspace = async () => {
-    try {
-      const next = await resetAppData();
-      dataRef.current = next;
-      setData(next);
+    const operation = saveQueueRef.current.catch(() => undefined).then(async () => {
+      let reset;
+      try {
+        reset = await resetAppData(revisionRef.current);
+      } catch (error) {
+        if (!(error instanceof WorkspaceConflictError)) throw error;
+        const latest = await loadAppData();
+        reset = await resetAppData(latest.revision);
+      }
+      revisionRef.current = reset.revision;
+      dataRef.current = reset.data;
+      setData(reset.data);
+      setStorageError(null);
       setTourOpen(false);
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
       window.dispatchEvent(new CustomEvent('taskflow:data-changed'));
-      workspaceChannelRef.current?.postMessage('updated');
+      workspaceChannelRef.current?.postMessage({ type: 'workspace-reset', revision: reset.revision });
+      return reset;
+    });
+    saveQueueRef.current = operation.catch(() => undefined);
+    try {
+      return await operation;
     } catch (error) {
       setStorageError(error.message || 'Workspace belum dapat direset.');
       throw error;

@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.2.3 - Storage security hardening
+
+- Migrasi `localStorage` legacy kini additive: data dipindahkan saat IndexedDB kosong dan key lama baru dibersihkan setelah transaksi sukses.
+- Import backup dibatasi 10 MB, 2.000 tugas, dan 10.000 sesi fokus tanpa silent truncation atau perubahan pada workspace ongoing.
+- Save, import, dan reset memakai revision metadata terpisah serta compare-and-swap untuk mencegah stale cross-tab write dan data lama muncul kembali setelah reset.
+- Event `BroadcastChannel` kini membawa tipe perubahan dan revision; metadata internal tidak masuk backup dan schema tetap v8.
+- Round-trip backup mempertahankan `reminderOffsetHours: null` tanpa mengubahnya menjadi pengingat 0 jam.
+
 ## 5.2.2 - Focus Run completion and review
 
 - Menyelesaikan tugas saat Focus Run masih berjalan kini meminta konfirmasi, menghentikan timer, lalu menyimpan recap sesi secara konsisten.

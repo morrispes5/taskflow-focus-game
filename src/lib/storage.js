@@ -15,9 +15,13 @@ export const DATABASE_NAME = 'taskflow_workspace';
 const DATABASE_VERSION = 1;
 const STORE_NAME = 'workspace';
 const APP_RECORD_KEY = 'app-data';
+const META_RECORD_KEY = 'workspace-meta';
 
 export const SCHEMA_VERSION = 8;
 export const BACKUP_VERSION = 8;
+export const MAX_BACKUP_FILE_BYTES = 10 * 1024 * 1024;
+export const MAX_IMPORT_TASKS = 2000;
+export const MAX_IMPORT_SESSIONS = 10000;
 
 export const MAX_TASK_LENGTH = 120;
 export const MAX_CATEGORY_LENGTH = 32;
@@ -116,7 +120,7 @@ export function normalizeTask(raw, index = 0) {
   const createdAt = numberOr(raw.createdAt, fallback);
   const completed = Boolean(raw.completed);
   const url = String(raw.url ?? '').trim().slice(0, MAX_URL_LENGTH);
-  const reminder = Number(raw.reminderOffsetHours);
+  const reminder = raw.reminderOffsetHours !== null && raw.reminderOffsetHours !== undefined ? Number(raw.reminderOffsetHours) : null;
   return {
     id: numberOr(raw.id, fallback),
     text,
@@ -349,6 +353,66 @@ export function clearLegacyTaskFlowData(storage = globalThis.localStorage) {
   storageKeyList().forEach((key) => storage.removeItem(key));
 }
 
+function parseLegacyJson(storage, key, fallback) {
+  const raw = storage?.getItem(key);
+  if (raw === null || raw === undefined) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`Data lama pada ${key} tidak dapat dibaca.`, { cause: error });
+  }
+}
+
+function readLegacyWorkspace(storage) {
+  if (!storage || !storageKeyList().some((key) => storage.getItem(key) !== null)) return null;
+  const tasks = parseLegacyJson(storage, STORAGE_KEYS.tasks, []);
+  const progress = parseLegacyJson(storage, STORAGE_KEYS.progress, {});
+  const sessions = parseLegacyJson(storage, STORAGE_KEYS.sessions, []);
+  const activeFocus = parseLegacyJson(storage, STORAGE_KEYS.activeFocus, null);
+  const preferences = parseLegacyJson(storage, STORAGE_KEYS.preferences, {});
+  const onboarding = parseLegacyJson(storage, STORAGE_KEYS.onboarding, {});
+  if (!Array.isArray(tasks) || !Array.isArray(sessions)) throw new Error('Daftar tugas atau sesi lama tidak sesuai format.');
+  const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (!isRecord(progress) || !isRecord(preferences) || !isRecord(onboarding) || (activeFocus !== null && !isRecord(activeFocus))) {
+    throw new Error('Progress, preferensi, onboarding, atau sesi aktif lama tidak sesuai format.');
+  }
+  const name = String(storage.getItem(STORAGE_KEYS.username) ?? '').trim();
+  return normalizeAppData({
+    tasks,
+    progress,
+    sessions,
+    activeFocus,
+    preferences,
+    profile: {
+      name,
+      tagline: storage.getItem(STORAGE_KEYS.tagline) ?? DEFAULT_PROFILE.tagline,
+      role: storage.getItem(STORAGE_KEYS.role) ?? '',
+      goal: storage.getItem(STORAGE_KEYS.goal) ?? ''
+    },
+    onboarding: {
+      ...(onboarding && typeof onboarding === 'object' ? onboarding : {}),
+      profileCompleted: typeof onboarding?.profileCompleted === 'boolean' ? onboarding.profileCompleted : Boolean(name)
+    }
+  });
+}
+
+function legacyMigrationError(cause) {
+  return new Error('Data lama TaskFlow belum dapat dipindahkan. Data aslinya tetap aman di browser; coba muat ulang atau pulihkan dari backup.', { cause });
+}
+
+function normalizeRevision(meta) {
+  const revision = Number(meta?.revision);
+  return Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
+}
+
+export class WorkspaceConflictError extends Error {
+  constructor() {
+    super('Workspace sudah diperbarui dari tab lain. Muat ulang data terbaru sebelum menyimpan lagi.');
+    this.name = 'WorkspaceConflictError';
+    this.code = 'WORKSPACE_CONFLICT';
+  }
+}
+
 function requestResult(request) {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
@@ -385,32 +449,68 @@ export function createWorkspaceStore({ indexedDb = globalThis.indexedDB, storage
   const read = async () => {
     const database = await openDatabase();
     const transaction = database.transaction(STORE_NAME, 'readonly');
-    const value = await requestResult(transaction.objectStore(STORE_NAME).get(APP_RECORD_KEY));
-    await transactionResult(transaction);
-    return value;
+    const complete = transactionResult(transaction);
+    const objectStore = transaction.objectStore(STORE_NAME);
+    const [value, meta] = await Promise.all([
+      requestResult(objectStore.get(APP_RECORD_KEY)),
+      requestResult(objectStore.get(META_RECORD_KEY))
+    ]);
+    await complete;
+    return { data: value ? normalizeAppData(value) : null, revision: normalizeRevision(meta) };
   };
 
-  const write = async (data) => {
+  const write = async (data, expectedRevision) => {
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new Error('Revision workspace wajib disertakan saat menyimpan.');
     const normalized = normalizeAppData(data);
     const database = await openDatabase();
     const transaction = database.transaction(STORE_NAME, 'readwrite');
-    transaction.objectStore(STORE_NAME).put(normalized, APP_RECORD_KEY);
-    await transactionResult(transaction);
-    return normalized;
+    const complete = transactionResult(transaction);
+    const objectStore = transaction.objectStore(STORE_NAME);
+    try {
+      const currentRevision = normalizeRevision(await requestResult(objectStore.get(META_RECORD_KEY)));
+      if (currentRevision !== expectedRevision) {
+        transaction.abort();
+        await complete.catch(() => undefined);
+        throw new WorkspaceConflictError();
+      }
+      const revision = currentRevision + 1;
+      objectStore.put(normalized, APP_RECORD_KEY);
+      objectStore.put({ revision }, META_RECORD_KEY);
+      await complete;
+      return { data: normalized, revision };
+    } catch (error) {
+      try { transaction.abort(); } catch { /* transaksi sudah selesai atau dibatalkan */ }
+      await complete.catch(() => undefined);
+      throw error;
+    }
   };
 
   return {
     async load() {
       const stored = await read();
-      // Existing IndexedDB workspaces are migrated in place. Legacy localStorage is only cleared on first IndexedDB create.
-      if (stored) return normalizeAppData(stored);
-      clearLegacyTaskFlowData(storage);
-      return write(createEmptyAppData());
+      // IndexedDB tetap authoritative. localStorage hanya dibaca jika record utama belum pernah dibuat.
+      if (stored.data) return stored;
+      let legacy;
+      try {
+        legacy = readLegacyWorkspace(storage);
+      } catch (error) {
+        throw legacyMigrationError(error);
+      }
+      try {
+        const created = await write(legacy || createEmptyAppData(), stored.revision);
+        if (legacy) clearLegacyTaskFlowData(storage);
+        return created;
+      } catch (error) {
+        if (error instanceof WorkspaceConflictError) return read();
+        if (legacy) throw legacyMigrationError(error);
+        throw error;
+      }
     },
-    save(data) { return write(data); },
-    async reset() {
+    save(data, expectedRevision) { return write(data, expectedRevision); },
+    async reset(expectedRevision) {
+      const reset = await write(createEmptyAppData(), expectedRevision);
       clearLegacyTaskFlowData(storage);
-      return write(createEmptyAppData());
+      return reset;
     },
     close() {
       if (!databasePromise) return;
@@ -423,8 +523,8 @@ export function createWorkspaceStore({ indexedDb = globalThis.indexedDB, storage
 const defaultStore = typeof window === 'undefined' ? null : createWorkspaceStore();
 
 export function loadAppData() { return defaultStore.load(); }
-export function saveAppData(data) { return defaultStore.save(data); }
-export function resetAppData() { return defaultStore.reset(); }
+export function saveAppData(data, expectedRevision) { return defaultStore.save(data, expectedRevision); }
+export function resetAppData(expectedRevision) { return defaultStore.reset(expectedRevision); }
 
 export function createBackup(data) {
   return {
@@ -446,6 +546,10 @@ export function createBackup(data) {
 export function parseBackupPayload(payload) {
   const source = Array.isArray(payload) ? { tasks: payload } : payload;
   if (!source || !Array.isArray(source.tasks)) throw new Error('Format JSON tidak sesuai.');
+  if (source.tasks.length > MAX_IMPORT_TASKS) throw new Error(`Backup melebihi batas ${MAX_IMPORT_TASKS.toLocaleString('id-ID')} tugas.`);
+  const sessions = source.focusSessions ?? source.sessions ?? [];
+  if (!Array.isArray(sessions)) throw new Error('Daftar sesi fokus di backup tidak sesuai format.');
+  if (sessions.length > MAX_IMPORT_SESSIONS) throw new Error(`Backup melebihi batas ${MAX_IMPORT_SESSIONS.toLocaleString('id-ID')} sesi fokus.`);
   const normalizedTasks = source.tasks.map(normalizeTask).filter(Boolean);
   if (source.tasks.length > 0 && normalizedTasks.length === 0) throw new Error('Tidak ada tugas valid di file tersebut.');
   return normalizeAppData({
@@ -453,10 +557,16 @@ export function parseBackupPayload(payload) {
     courses: source.courses,
     semester: source.semester,
     progress: source.progress,
-    sessions: source.focusSessions,
+    sessions,
     activeFocus: source.activeFocus,
     profile: source.profile,
     preferences: source.preferences,
     onboarding: source.onboarding
   });
+}
+
+export function validateBackupFile(file) {
+  if (!file || !Number.isFinite(Number(file.size))) throw new Error('File backup tidak valid.');
+  if (Number(file.size) > MAX_BACKUP_FILE_BYTES) throw new Error('Ukuran file backup maksimal 10 MB.');
+  return file;
 }

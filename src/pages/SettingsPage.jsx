@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, CircleHelp, Download, Sparkles, Trash2, Upload, Zap } from 'lucide-react';
-import { createBackup, parseBackupPayload, DEFAULT_PROFILE, FOCUS_SOUNDSCAPES, FOCUS_SOUNDSCAPE_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES } from '../lib/storage.js';
+import { createBackup, parseBackupPayload, validateBackupFile, DEFAULT_PROFILE, FOCUS_SOUNDSCAPES, FOCUS_SOUNDSCAPE_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES } from '../lib/storage.js';
 import { makeCourse, validateProfileInput, validateSemesterInput, getRoleTerminology, makeTask } from '../lib/domain.js';
 import { requestNotifyPermission } from '../lib/reminders.js';
 import { ConfirmDialog } from '../components/ui.jsx';
@@ -24,9 +24,9 @@ export function SettingsPage({ data, commit, updatePreferences, onStartTutorial,
     setStatus({ text: 'Semester disimpan.', error: false });
   };
   const exportData = () => { const blob = new Blob([JSON.stringify(createBackup(data), null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'taskflow-backup.json'; anchor.click(); URL.revokeObjectURL(url); setStatus({ text: 'Backup berhasil dibuat.', error: false }); };
-  const importData = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const parsed = parseBackupPayload(JSON.parse(await file.text())); setConfirm({ type: 'import', data: parsed, title: 'Pulihkan backup ini?', message: `Backup berisi ${parsed.tasks.length} tugas dan ${parsed.courses.length} mata kuliah, dan akan menggantikan data lokal saat ini.` }); } catch (error) { setStatus({ text: error.message || 'File JSON tidak bisa dibaca.', error: true }); } event.target.value = ''; };
+  const importData = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { validateBackupFile(file); const parsed = parseBackupPayload(JSON.parse(await file.text())); setConfirm({ type: 'import', data: parsed, title: 'Pulihkan backup ini?', message: `Backup berisi ${parsed.tasks.length} tugas dan ${parsed.courses.length} mata kuliah, dan akan menggantikan data lokal saat ini.` }); } catch (error) { setStatus({ text: error.message || 'File JSON tidak bisa dibaca.', error: true }); } event.target.value = ''; };
   const resetAll = () => setConfirm({ type: 'reset', title: 'Mulai workspace baru?', message: 'Tugas, mata kuliah, profil, sesi fokus, XP, preferensi, dan status tutorial di perangkat ini akan dihapus. Kamu akan kembali ke pengisian profil.' });
-  const confirmAction = async () => { if (confirm?.type === 'import') { commit(() => confirm.data); setStatus({ text: 'Data berhasil dipulihkan.', error: false }); } if (confirm?.type === 'reset') { try { await onResetWorkspace(); } catch { setStatus({ text: 'Workspace belum dapat direset.', error: true }); } } setConfirm(null); };
+  const confirmAction = async () => { if (confirm?.type === 'import') { try { await commit(() => confirm.data); setStatus({ text: 'Data berhasil dipulihkan.', error: false }); } catch (error) { setStatus({ text: error.message || 'Data belum dapat dipulihkan.', error: true }); } } if (confirm?.type === 'reset') { try { await onResetWorkspace(); setStatus({ text: 'Workspace baru siap digunakan.', error: false }); } catch { setStatus({ text: 'Workspace belum dapat direset.', error: true }); } } setConfirm(null); };
   const saveCourse = (input, id) => commit((current) => {
     const course = makeCourse(input, id || Date.now());
     const courses = id ? current.courses.map((item) => item.id === id ? { ...item, ...course, id } : item) : [...current.courses, course];
