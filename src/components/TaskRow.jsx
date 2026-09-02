@@ -1,10 +1,10 @@
 import { motion } from 'motion/react';
-import { Archive, CalendarClock, Check, Clock3, Copy, MoreHorizontal, Paperclip, Pencil, Pin, Play, Trash2, Zap } from 'lucide-react';
-import { getDueInfo, getMeetingBadge, getMeetingLabel, getRoleTerminology, getSubtaskProgress, getTaskLabel, getTaskXp } from '../lib/domain.js';
+import { Archive, CalendarClock, Check, Clock3, Copy, MoreHorizontal, Paperclip, Pencil, Pin, Play, Sunrise, Trash2, Zap } from 'lucide-react';
+import { getDueInfo, getMeetingBadge, getMeetingLabel, getRoleTerminology, getSubtaskProgress, getTaskLabel, getTaskXp, SNOOZE_LABELS, SNOOZE_TARGETS } from '../lib/domain.js';
 import { PRIORITY_LABELS, TASK_TYPE_LABELS } from '../lib/storage.js';
 import { CourseDot } from './ui.jsx';
 
-export function TaskRow({ task, courses = [], role = 'mahasiswa', onToggle, onEdit, onDelete, onPin, onArchive, onDuplicate, compact = false }) {
+export function TaskRow({ task, courses = [], role = 'mahasiswa', onToggle, onEdit, onDelete, onPin, onArchive, onDuplicate, onSnooze, compact = false }) {
   const terms = getRoleTerminology(role);
   const due = getDueInfo(task);
   const sub = getSubtaskProgress(task);
@@ -45,6 +45,11 @@ export function TaskRow({ task, courses = [], role = 'mahasiswa', onToggle, onEd
         <details className="task-more">
           <summary className="icon-button" aria-label={`Lainnya: ${task.text}`} title="Lainnya"><MoreHorizontal size={16} /></summary>
           <div className="task-more-menu">
+            {onSnooze && !task.completed && SNOOZE_TARGETS.map((target) => (
+              <button key={target} type="button" onClick={() => onSnooze(task, target)}>
+                {target === 'tomorrow' ? <Sunrise size={14} /> : <CalendarClock size={14} />}{SNOOZE_LABELS[target]}
+              </button>
+            ))}
             {onPin && <button type="button" onClick={() => onPin(task)}><Pin size={14} />{task.pinned ? 'Lepas sematan' : 'Sematkan'}</button>}
             {onDuplicate && <button type="button" onClick={() => onDuplicate(task)}><Copy size={14} />Duplikat</button>}
             {onArchive && <button type="button" onClick={() => onArchive(task)}><Archive size={14} />{task.archived ? 'Keluarkan arsip' : 'Arsipkan'}</button>}

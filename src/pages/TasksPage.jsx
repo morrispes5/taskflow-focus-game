@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { MoreHorizontal, Search, Zap } from 'lucide-react';
-import { applyTaskSave, filterTasks, makeTask, sortTasks, validateTaskInput } from '../lib/domain.js';
+import { applySnooze, applyTaskSave, filterTasks, formatDate, getSnoozeDate, makeTask, sortTasks, validateTaskInput } from '../lib/domain.js';
 import { TASK_TYPE_LABELS, TASK_TYPES } from '../lib/storage.js';
 import { ConfirmDialog, EmptyState } from '../components/ui.jsx';
 import { TaskRow } from '../components/TaskRow.jsx';
@@ -45,6 +45,7 @@ export function TasksPage({ data, commit, toggleTask }) {
   const addQuick = (event) => { event.preventDefault(); const validation = validateTaskInput({ text: quickText }); if (validation) { setQuickError(validation.message); return; } saveTask({ text: quickText, priority: 'medium', category: '', dueDate: '', type: 'tugas', courseId: courseId !== 'all' && courseId !== 'none' ? Number(courseId) : null }); setQuickText(''); setQuickError(''); };
   const pinTask = (task) => commit((current) => ({ ...current, tasks: current.tasks.map((item) => item.id === task.id ? { ...item, pinned: !item.pinned, updatedAt: Date.now() } : item) }), task.pinned ? 'Sematan dilepas.' : 'Tugas disematkan.');
   const archiveTask = (task) => commit((current) => ({ ...current, tasks: current.tasks.map((item) => item.id === task.id ? { ...item, archived: !item.archived, updatedAt: Date.now() } : item) }), task.archived ? 'Tugas dikeluarkan dari arsip.' : 'Tugas diarsipkan.');
+  const snoozeTask = (task, target) => commit((current) => applySnooze(current, task.id, target), `Deadline dipindah ke ${formatDate(getSnoozeDate(target))}.`);
   const duplicateTask = (task) => commit((current) => ({ ...current, tasks: [makeTask({ ...task, text: `${task.text} (salinan)`, pinned: false }), ...current.tasks] }), 'Salinan tugas dibuat.');
   return <>
     <section className="task-capture card">
@@ -84,7 +85,7 @@ export function TasksPage({ data, commit, toggleTask }) {
       {visible.length ? (
         <ul className="task-list task-list-room">
           <AnimatePresence mode="popLayout">
-            {visible.map((task) => <TaskRow key={task.id} task={task} courses={data.courses} role={data.profile.role} onToggle={toggleTask} onEdit={setDialogTask} onDelete={setConfirmTask} onPin={pinTask} onArchive={archiveTask} onDuplicate={duplicateTask} />)}
+            {visible.map((task) => <TaskRow key={task.id} task={task} courses={data.courses} role={data.profile.role} onToggle={toggleTask} onEdit={setDialogTask} onDelete={setConfirmTask} onPin={pinTask} onArchive={archiveTask} onDuplicate={duplicateTask} onSnooze={snoozeTask} />)}
           </AnimatePresence>
         </ul>
       ) : (

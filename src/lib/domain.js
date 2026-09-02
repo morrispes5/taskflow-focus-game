@@ -1,4 +1,4 @@
-import { addDays, differenceInCalendarDays, endOfDay, format, isWithinInterval, parseISO, startOfMonth, startOfWeek } from 'date-fns';
+import { addDays, differenceInCalendarDays, endOfDay, format, isWithinInterval, nextSaturday, parseISO, startOfMonth, startOfWeek } from 'date-fns';
 import {
   normalizeTask, normalizeMeeting, PRIORITY_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES, MAX_PROFILE_GOAL_LENGTH, MAX_PROFILE_NAME_LENGTH,
   MAX_COURSE_NAME, MAX_COURSES, MAX_NOTES_LENGTH, MAX_SUBTASKS, MAX_TASK_LENGTH, MAX_URL_LENGTH, MAX_MEETINGS, MAX_MEETING_TITLE, MAX_MEETING_NOTES,
@@ -602,6 +602,70 @@ export function getAnalytics(tasks, sessions, courses = [], reference = new Date
     types,
     priority,
     days
+  };
+}
+
+export const SNOOZE_TARGETS = ['tomorrow', 'weekend'];
+export const SNOOZE_LABELS = { tomorrow: 'Tunda ke besok', weekend: 'Tunda ke akhir pekan' };
+
+// Tugas yang terlambat hanya menumpuk dan membuat daftar terasa menghakimi.
+// Menunda cukup menggeser dueDate; status, XP, dan riwayat tidak disentuh.
+export function getSnoozeDate(target, reference = new Date()) {
+  if (target === 'weekend') return todayString(nextSaturday(reference));
+  return todayString(addDays(reference, 1));
+}
+
+export function applySnooze(data, taskId, target, now = Date.now()) {
+  if (!SNOOZE_TARGETS.includes(target)) return data;
+  const dueDate = getSnoozeDate(target, new Date(now));
+  return {
+    ...data,
+    tasks: data.tasks.map((task) => task.id !== taskId ? task : { ...task, dueDate, updatedAt: now })
+  };
+}
+
+// Tutup minggu: membaca ritme satu minggu, bukan menilai. Yang meleset adalah
+// tugas aktif yang tanggalnya sudah lewat di dalam minggu berjalan, jadi tugas
+// yang jatuh tempo hari ini belum dihitung meleset.
+export function getWeekReview(tasks, sessions = [], reference = new Date()) {
+  const start = getWeekStart(reference);
+  const end = endOfDay(addDays(start, 6));
+  const startKey = todayString(start);
+  const endKey = todayString(addDays(start, 6));
+  const todayKey = todayString(reference);
+  const live = visibleTasks(tasks);
+  const inWeek = (dateKey) => Boolean(dateKey) && dateKey >= startKey && dateKey <= endKey;
+
+  const completed = live.filter((task) => task.completedAt && isWithinInterval(new Date(task.completedAt), { start, end }));
+  const slipped = live.filter((task) => !task.completed && inWeek(task.dueDate) && task.dueDate < todayKey);
+  const upcoming = live.filter((task) => !task.completed && inWeek(task.dueDate) && task.dueDate >= todayKey);
+  const weekSessions = (Array.isArray(sessions) ? sessions : []).filter((session) => {
+    const dateKey = dateKeyFromTimestamp(session.endedAt || session.startedAt);
+    return isCompletedFocusSession(session) && inWeek(dateKey);
+  });
+
+  return {
+    startKey,
+    endKey,
+    label: `${formatDate(startKey)} – ${formatDate(endKey)}`,
+    completed,
+    slipped,
+    upcoming,
+    focusMinutes: Math.floor(weekSessions.reduce((sum, session) => sum + session.activeSeconds, 0) / 60),
+    sessionsCompleted: weekSessions.length
+  };
+}
+
+// Membawa tugas yang meleset ke minggu depan mempertahankan hari yang sama,
+// supaya ritme mingguan pengguna tidak berubah diam-diam.
+export function applyWeekCarryOver(data, taskIds, now = Date.now()) {
+  const ids = new Set(taskIds);
+  if (!ids.size) return data;
+  return {
+    ...data,
+    tasks: data.tasks.map((task) => (!ids.has(task.id) || !task.dueDate)
+      ? task
+      : { ...task, dueDate: todayString(addDays(parseDateString(task.dueDate), 7)), updatedAt: now })
   };
 }
 

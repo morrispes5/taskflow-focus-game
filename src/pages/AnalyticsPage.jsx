@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { ArrowRight, CalendarClock, Check, CircleHelp, Clock3, EyeOff, Flame, ListChecks } from 'lucide-react';
-import { formatDate, getAnalytics, getDisplayStreak, hasSemesterRange } from '../lib/domain.js';
+import { applyWeekCarryOver, formatDate, getAnalytics, getDisplayStreak, getWeekReview, hasSemesterRange } from '../lib/domain.js';
 import { EmptyState, ProgressMeter, StatCard } from '../components/ui.jsx';
+import { WeekReview } from '../components/analytics/WeekReview.jsx';
 
 function MetricList({ title, kicker, items, empty, extra }) {
   const max = Math.max(...items.map((item) => item.count), 1);
@@ -21,12 +22,18 @@ function semesterRangeLabel(semester) {
   return `${start} – ${end}`;
 }
 
-export function AnalyticsPage({ data }) {
+export function AnalyticsPage({ data, commit }) {
   const canFilterSemester = hasSemesterRange(data.semester);
   const [scope, setScope] = useState(canFilterSemester ? 'semester' : 'all');
   const analytics = getAnalytics(data.tasks, data.sessions, data.courses, new Date(), { semester: data.semester, scope: canFilterSemester ? scope : 'all' });
   const hasAnyData = data.tasks.length || data.sessions.length;
   const streak = getDisplayStreak(data.progress);
+  const weekReview = getWeekReview(data.tasks, data.sessions);
+  // Tutup minggu terbuka sendiri di akhir pekan, saat memang paling relevan.
+  // Di hari lain tetap bisa dibuka manual, tanpa menambah keramaian halaman.
+  const isWeekend = [0, 6].includes(new Date().getDay());
+  const [reviewOpen, setReviewOpen] = useState(isWeekend);
+  const carryOver = (taskIds) => commit((current) => applyWeekCarryOver(current, taskIds), `${taskIds.length} tugas dibawa ke minggu depan.`);
   const hasScopedData = analytics.completed + analytics.active + analytics.sessionsCompleted > 0;
   return <>
     {canFilterSemester && (
@@ -80,6 +87,9 @@ export function AnalyticsPage({ data }) {
           </div>
         </article>
       </section>
+      {reviewOpen
+        ? <WeekReview review={weekReview} onCarryOver={carryOver} />
+        : <button className="text-link analytics-week-toggle" type="button" onClick={() => setReviewOpen(true)}>Tutup minggu ini</button>}
       <section className="analytics-columns">
         <MetricList title="Per mata kuliah" kicker="Semester" items={analytics.courses} empty="Belum ada tugas yang menempel ke mata kuliah." extra={(item) => item.completed != null ? ` · ${item.completed} selesai` : ''} />
         <MetricList title="Jenis tugas" kicker="Tipe" items={analytics.types} empty="Belum ada jenis tugas." />

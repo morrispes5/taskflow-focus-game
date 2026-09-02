@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MotionConfig } from 'motion/react';
 import { loadAppData, saveAppData, resetAppData, loadWorkspaceSnapshot, WorkspaceConflictError } from './lib/storage.js';
-import { applyTaskToggle, resolveTheme } from './lib/domain.js';
+import { applyTaskSave, applyTaskToggle, resolveTheme } from './lib/domain.js';
 import { getDueReminders, markRemindersNotified, sendNotification } from './lib/reminders.js';
 import { playFeedbackTone } from './lib/audio.js';
 import { AppShell } from './components/AppShell.jsx';
@@ -23,6 +23,10 @@ const PAGE_MODULES = {
 
 // Unduhan dimulai saat modul dievaluasi, bukan saat render, supaya berjalan
 // paralel dengan hidrasi IndexedDB dan tidak menambah waktu tunggu.
+// Dialog tugas hanya diunduh saat tangkap cepat benar-benar dibuka, supaya
+// pintasan global ini tidak menambah beban chunk utama setiap halaman.
+const QuickCaptureDialog = lazy(() => import('./components/TaskDialog.jsx').then((module) => ({ default: module.TaskDialog })));
+
 const ACTIVE_PAGE = getCurrentPage();
 const activePageModule = (PAGE_MODULES[ACTIVE_PAGE] || PAGE_MODULES.home)();
 const ActivePage = lazy(() => activePageModule);
@@ -34,6 +38,7 @@ export default function TaskFlowApp() {
   const [storageError, setStorageError] = useState(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [recoverySnapshot, setRecoverySnapshot] = useState(null);
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.('(prefers-color-scheme: dark)').matches);
   const dataRef = useRef(data);
   const revisionRef = useRef(0);
@@ -122,6 +127,20 @@ export default function TaskFlowApp() {
     if (!recoverySnapshot) return undefined;
     return commit(() => recoverySnapshot.data, 'Snapshot dipulihkan.');
   };
+
+  // Ide bisa datang di halaman mana pun, termasuk saat Focus Run berjalan.
+  // Ctrl+K menangkapnya tanpa harus pindah halaman lebih dulu.
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key?.toLowerCase() !== 'k' || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+      event.preventDefault();
+      setQuickCaptureOpen(true);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const saveQuickCapture = (input) => commit((current) => applyTaskSave(current, input), 'Tugas ditambahkan.', 'taskAdded');
 
   const theme = data ? resolveTheme(data.preferences.theme, systemDark) : 'light';
 
@@ -222,6 +241,19 @@ export default function TaskFlowApp() {
         {/* Setiap halaman hanya memakai prop yang relevan baginya; sisanya diabaikan. */}
         <Suspense fallback={null}>
           <ActivePage data={data} commit={commit} toggleTask={toggleTask} updatePreferences={updatePreferences} onStartTutorial={() => setTourOpen(true)} onResetWorkspace={resetWorkspace} />
+        </Suspense>
+        <Suspense fallback={null}>
+          {quickCaptureOpen && (
+            <QuickCaptureDialog
+              open={quickCaptureOpen}
+              task={null}
+              courses={data.courses}
+              semester={data.semester}
+              role={data.profile.role}
+              onClose={() => setQuickCaptureOpen(false)}
+              onSave={saveQuickCapture}
+            />
+          )}
         </Suspense>
       </AppShell>
     </MotionConfig>

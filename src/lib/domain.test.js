@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays } from 'date-fns';
 import {
-  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, finishFocusRun, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDashboardStats, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, applyTaskSave, formatDayDate, getBackupReminder, getDisplayStreak, getMeetingBadge, getMeetingLabel, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
+  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, finishFocusRun, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDashboardStats, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, applySnooze, applyTaskSave, applyWeekCarryOver, formatDayDate, getSnoozeDate, getWeekReview, getBackupReminder, getDisplayStreak, getMeetingBadge, getMeetingLabel, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
   getProfileRecommendations, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
   getSemesterWeek, replaceActiveFocus, resumeDistraction, selectDailyMission, selectReviewTask, sortTasks, spawnNextOccurrence, todayString, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput,
   validateMeetingInput, generateDefaultMeetings, getSemesterSksSummary, getCourseMeetingsProgress, getRoleTerminology
@@ -490,5 +490,94 @@ describe('formatDayDate', () => {
   it('memakai nama hari dan bulan Indonesia', () => {
     expect(formatDayDate(new Date(2026, 8, 2))).toBe('Rabu, 2 Sep');
     expect(formatDayDate(new Date(2026, 0, 1))).toBe('Kamis, 1 Jan');
+  });
+});
+
+describe('tunda cepat', () => {
+  const rabu = new Date(2026, 8, 2);
+
+  it('menunda ke hari berikutnya', () => {
+    expect(getSnoozeDate('tomorrow', rabu)).toBe('2026-09-03');
+  });
+
+  it('menunda ke Sabtu terdekat, dan ke Sabtu berikutnya bila hari ini Sabtu', () => {
+    expect(getSnoozeDate('weekend', rabu)).toBe('2026-09-05');
+    expect(getSnoozeDate('weekend', new Date(2026, 8, 5))).toBe('2026-09-12');
+  });
+
+  it('hanya menggeser deadline tanpa menyentuh status atau riwayat', () => {
+    const data = { tasks: [makeTask({ text: 'Laporan', dueDate: '2026-08-20', priority: 'high' }, 1)] };
+    const next = applySnooze(data, 1, 'tomorrow', rabu.getTime());
+    expect(next.tasks[0]).toMatchObject({ dueDate: '2026-09-03', completed: false, priority: 'high' });
+    expect(next.tasks[0].createdAt).toBe(data.tasks[0].createdAt);
+  });
+
+  it('mengabaikan target yang tidak dikenal', () => {
+    const data = { tasks: [makeTask({ text: 'Laporan', dueDate: '2026-08-20' }, 1)] };
+    expect(applySnooze(data, 1, 'entahlah')).toBe(data);
+  });
+});
+
+describe('tutup minggu', () => {
+  // Kamis 3 September 2026; minggunya Senin 31 Agustus sampai Minggu 6 September.
+  const kamis = new Date(2026, 8, 3, 12);
+  const tugas = (id, extra) => makeTask({ text: `Tugas ${id}`, ...extra }, id);
+
+  it('memisahkan yang selesai, yang meleset, dan yang masih menunggu', () => {
+    const tasks = [
+      { ...tugas(1, { dueDate: '2026-09-01' }), completed: true, completedAt: new Date(2026, 8, 1, 10).getTime() },
+      tugas(2, { dueDate: '2026-09-01' }),
+      tugas(3, { dueDate: '2026-09-03' }),
+      tugas(4, { dueDate: '2026-09-05' })
+    ];
+    const review = getWeekReview(tasks, [], kamis);
+    expect(review.completed.map((task) => task.id)).toEqual([1]);
+    expect(review.slipped.map((task) => task.id)).toEqual([2]);
+    expect(review.upcoming.map((task) => task.id)).toEqual([3, 4]);
+  });
+
+  it('tidak menyebut tugas yang jatuh tempo hari ini sebagai meleset', () => {
+    expect(getWeekReview([tugas(9, { dueDate: '2026-09-03' })], [], kamis).slipped).toEqual([]);
+  });
+
+  it('mengabaikan tugas di luar minggu berjalan', () => {
+    const review = getWeekReview([tugas(5, { dueDate: '2026-08-25' }), tugas(6, { dueDate: '2026-09-14' })], [], kamis);
+    expect(review.slipped).toEqual([]);
+    expect(review.upcoming).toEqual([]);
+  });
+
+  it('menjumlahkan menit fokus dari sesi minggu ini saja', () => {
+    const sessions = [
+      { id: 1, status: 'completed', mode: 'focus', activeSeconds: 1500, startedAt: new Date(2026, 8, 1).getTime(), endedAt: new Date(2026, 8, 1).getTime() },
+      { id: 2, status: 'completed', mode: 'focus', activeSeconds: 600, startedAt: new Date(2026, 7, 20).getTime(), endedAt: new Date(2026, 7, 20).getTime() },
+      { id: 3, status: 'completed', mode: 'review', activeSeconds: 900, startedAt: new Date(2026, 8, 2).getTime(), endedAt: new Date(2026, 8, 2).getTime() }
+    ];
+    const review = getWeekReview([], sessions, kamis);
+    expect(review.focusMinutes).toBe(25);
+    expect(review.sessionsCompleted).toBe(1);
+  });
+
+  it('memberi label rentang minggu yang terbaca', () => {
+    expect(getWeekReview([], [], kamis).label).toBe('31 Agu – 6 Sep');
+  });
+});
+
+describe('bawa ke minggu depan', () => {
+  it('mempertahankan hari yang sama pada minggu berikutnya', () => {
+    const data = { tasks: [makeTask({ text: 'Satu', dueDate: '2026-09-01' }, 1), makeTask({ text: 'Dua', dueDate: '2026-09-02' }, 2)] };
+    const next = applyWeekCarryOver(data, [1, 2], 999);
+    expect(next.tasks.map((task) => task.dueDate)).toEqual(['2026-09-08', '2026-09-09']);
+    expect(next.tasks[0].updatedAt).toBe(999);
+  });
+
+  it('tidak menyentuh tugas yang tidak dipilih atau tanpa deadline', () => {
+    const data = { tasks: [makeTask({ text: 'Satu', dueDate: '2026-09-01' }, 1), makeTask({ text: 'Dua' }, 2)] };
+    const next = applyWeekCarryOver(data, [1, 2]);
+    expect(next.tasks[1].dueDate).toBeNull();
+  });
+
+  it('mengembalikan data apa adanya ketika tidak ada yang dipilih', () => {
+    const data = { tasks: [makeTask({ text: 'Satu', dueDate: '2026-09-01' }, 1)] };
+    expect(applyWeekCarryOver(data, [])).toBe(data);
   });
 });

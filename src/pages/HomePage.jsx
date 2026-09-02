@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, CalendarClock, CirclePlay, Clock3, Flame, ListChecks, Sparkles, Zap } from 'lucide-react';
 import { playHeroSequence } from '../motion/anime.js';
-import { applyTaskSave, getCountdownLabel, getCourseProgress, getDashboardStats, getDueInfo, getTaskFocusMinutes, getTaskXp, getTodayAgenda, getUpcomingDeadlines, selectDailyMission, selectReviewTask, sortTasks } from '../lib/domain.js';
+import { applySnooze, applyTaskSave, formatDate, getCountdownLabel, getSnoozeDate, getCourseProgress, getDashboardStats, getDueInfo, getTaskFocusMinutes, getTaskXp, getTodayAgenda, getUpcomingDeadlines, selectDailyMission, selectReviewTask, sortTasks } from '../lib/domain.js';
 import { CourseDot, Illustration, PageActions, ProgressMeter, StatCard } from '../components/ui.jsx';
 import { TaskDialog } from '../components/TaskDialog.jsx';
 import { MissionCard } from '../components/home/MissionCard.jsx';
@@ -26,6 +26,7 @@ export function HomePage({ data, commit, toggleTask }) {
   const agenda = getTodayAgenda(data.tasks, data.courses);
   const courseProgress = getCourseProgress(data.courses, data.tasks).filter((item) => item.total);
   const saveTask = (input, id) => commit((current) => applyTaskSave(current, input, id), id ? 'Tugas diperbarui.' : 'Tugas ditambahkan.', id ? null : 'taskAdded');
+  const snoozeTask = (task, target) => commit((current) => applySnooze(current, task.id, target), `Deadline dipindah ke ${formatDate(getSnoozeDate(target))}.`);
   useEffect(() => {
     const animation = playHeroSequence(heroRef.current, reduced);
     return () => animation?.pause?.();
@@ -72,7 +73,13 @@ export function HomePage({ data, commit, toggleTask }) {
         <div className="card-header"><div><p className="section-kicker">Hari ini</p><h2>Agenda</h2></div><a className="text-link" href="calendar.html">Kalender <ArrowRight size={15} /></a></div>
         {agenda.classes.length + agenda.due.length + agenda.overdue.length ? (
           <ul className="agenda-list">
-            {agenda.overdue.map((item) => <li key={`o-${item.id}`} className="agenda-overdue"><span>Terlambat</span><strong>{item.title}</strong></li>)}
+            {agenda.overdue.map((item) => (
+              <li key={`o-${item.id}`} className="agenda-overdue">
+                <span>Terlambat</span>
+                <strong>{item.title}</strong>
+                <button className="text-link" type="button" onClick={() => snoozeTask(item.task, 'tomorrow')}>Tunda ke besok</button>
+              </li>
+            ))}
             {agenda.classes.map((item) => <li key={item.id}><CourseDot color={item.color} /><span>{item.time}</span><strong>{item.title}</strong>{item.room && <em>{item.room}</em>}</li>)}
             {agenda.due.map((item) => <li key={`t-${item.id}`}><span>{item.time}</span><strong>{item.title}</strong></li>)}
           </ul>
