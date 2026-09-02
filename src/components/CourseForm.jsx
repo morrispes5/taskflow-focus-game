@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookOpen, Check, FolderOpen, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { BookOpen, Check, FolderOpen, Plus, Trash2 } from 'lucide-react';
 import { getCourseMeetingsProgress, getRoleTerminology, getSemesterSksSummary, validateCourseInput } from '../lib/domain.js';
 import { COURSE_COLORS, WEEKDAY_LABELS } from '../lib/storage.js';
 import { CourseMeetingModal } from './CourseMeetingModal.jsx';

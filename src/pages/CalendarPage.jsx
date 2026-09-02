@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { addMonths, format } from 'date-fns';
-import { ArrowLeft, ArrowRight, BookOpen, FolderOpen } from 'lucide-react';
+import { ArrowLeft, ArrowRight, FolderOpen } from 'lucide-react';
 import { getAgendaForDay, getCalendarDays, getCalendarMarks, getRoleTerminology, getSemesterSksSummary, todayString } from '../lib/domain.js';
 import { CourseDot } from '../components/ui.jsx';
 

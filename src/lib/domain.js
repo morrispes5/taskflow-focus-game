@@ -23,7 +23,8 @@ export function formatTime(value) {
   return value && /^\d{2}:\d{2}$/.test(value) ? value : '';
 }
 
-export function dueTimestamp(task, reference = new Date()) {
+// TODO(fase-4): parameter reference tidak dipakai; isOverdue mengira nilai ini berpengaruh.
+export function dueTimestamp(task, _reference = new Date()) {
   if (!task.dueDate) return null;
   const time = formatTime(task.dueTime) || '23:59';
   return parseISO(`${task.dueDate}T${time}:00`).getTime() || parseDateString(task.dueDate).getTime();
@@ -416,7 +417,7 @@ export function getDashboardStats(tasks, progress, sessions, reference = new Dat
   };
 }
 
-export function getUpcomingDeadlines(tasks, reference = new Date(), limit = 3) {
+export function getUpcomingDeadlines(tasks, _reference = new Date(), limit = 3) {
   return sortTasks(
     visibleTasks(tasks).filter((task) => !task.completed && task.dueDate),
     'dueSoon'
@@ -727,7 +728,7 @@ export function validateMeetingInput(input, existing = []) {
   return null;
 }
 
-export function generateDefaultMeetings(courseName = '', role = 'mahasiswa') {
+export function generateDefaultMeetings(_courseName = '', role = 'mahasiswa') {
   const isProfessional = role === 'profesional' || role === 'lainnya';
   if (isProfessional) {
     return [

@@ -14,7 +14,7 @@ Live: `https://morrispes5.github.io/taskflow-focus-game/`
 - Jangan menambah server, akun, atau kirim data pengguna ke jaringan.
 - Jangan menghapus workspace pengguna saat load. Migrasi harus additive.
 - Jangan mengganti `base: './'` di `vite.config.js`. Path absolut merusak GitHub Pages di subpath.
-- Jangan mengedit `script.js` (legacy). Kode aktif ada di `src/`.
+- Seluruh kode aktif ada di `src/`. Prototipe `script.js` sudah dihapus; jangan menghidupkannya kembali.
 - UI Bahasa Indonesia. Focus Run tetap loop utama: satu misi, satu sesi.
 - Jangan membuat dashboard ramai, gradient besar, atau metrik fiktif.
 

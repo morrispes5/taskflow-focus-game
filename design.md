@@ -426,7 +426,7 @@ Setiap komponen harus memiliki state default, hover, focus-visible, disabled, er
 
 ### Fase 5: validasi
 
-- Jalankan `node --check script.js`.
+- Jalankan `npm run lint` dan `npm test`.
 - Jalankan `git diff --check` jika repository sudah memiliki metadata Git yang valid.
 - Uji localStorage lama dan data baru.
 - Uji alur Focus Run dari awal sampai reward.
