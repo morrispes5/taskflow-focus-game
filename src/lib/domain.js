@@ -24,6 +24,12 @@ export function formatDayDate(date) {
   return `${WEEKDAY_LABELS[date.getDay()]}, ${date.getDate()} ${MONTH_LABELS_SHORT[date.getMonth()]}`;
 }
 
+export function formatTimer(seconds) {
+  const numeric = Number(seconds);
+  const safe = Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : 0;
+  return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
+}
+
 export function formatTime(value) {
   return value && /^\d{2}:\d{2}$/.test(value) ? value : '';
 }
