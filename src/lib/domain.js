@@ -404,6 +404,7 @@ export function getDashboardStats(tasks, progress, sessions, reference = new Dat
   const active = live.filter((task) => !task.completed);
   const completed = live.filter((task) => task.completed);
   const today = todayString(reference);
+  const displayStreak = getDisplayStreak(progress, today);
   return {
     total: live.length,
     active: active.length,
@@ -413,7 +414,9 @@ export function getDashboardStats(tasks, progress, sessions, reference = new Dat
     focusMinutes: Math.floor(sessions.filter(isCompletedFocusSession).reduce((sum, session) => sum + session.activeSeconds, 0) / 60),
     xp: progress.totalXp,
     level: progress.level,
-    streak: progress.currentStreak
+    streak: displayStreak.value,
+    streakBroken: displayStreak.broken,
+    bestStreak: displayStreak.bestStreak
   };
 }
 
@@ -902,6 +905,21 @@ export function getStreakFreezeInfo(progress, dateKey) {
   const missedDays = gap - 1;
   const remaining = getStreakFreezesRemaining(progress, dateKey);
   return missedDays <= remaining ? { used: missedDays, remainingAfter: remaining - missedDays } : null;
+}
+
+// Streak tersimpan hanya diperbarui saat ada aktivitas (updateStreak). Tanpa
+// selector ini, pengguna yang lama tidak membuka TaskFlow tetap melihat angka
+// streak lama seolah masih berjalan. Ini murni tampilan: tidak ada yang ditulis
+// ke storage, dan aturan freeze-nya sengaja sama persis dengan updateStreak.
+export function getDisplayStreak(progress, dateKey = todayString()) {
+  const stored = Math.max(0, Number(progress?.currentStreak) || 0);
+  const bestStreak = Math.max(0, Number(progress?.bestStreak) || 0);
+  const intact = (value) => ({ value, broken: false, bestStreak });
+  if (!stored) return intact(0);
+  const gap = getStreakGap(progress, dateKey);
+  // Tanpa lastActiveDate tidak ada dasar untuk menyatakan streak putus.
+  if (gap === null || gap <= 1) return intact(stored);
+  return getStreakFreezeInfo(progress, dateKey) ? intact(stored) : { value: 0, broken: true, bestStreak };
 }
 
 export function updateStreak(progress, dateKey) {

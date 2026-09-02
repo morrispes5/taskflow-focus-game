@@ -34,7 +34,10 @@ export function FocusPage({ data, commit, toggleTask }) {
   const [resumePromptOpen, setResumePromptOpen] = useState(false);
   const [completeTaskPromptOpen, setCompleteTaskPromptOpen] = useState(false);
   const [timerCompletionOpen, setTimerCompletionOpen] = useState(false);
-  const reduced = data.preferences.motion === 'compact' || useReducedMotion();
+  // Hook wajib dipanggil tanpa syarat: menaruhnya di sisi kanan || membuat
+  // jumlah hook berubah saat preferensi motion berganti (mis. dari tab lain).
+  const systemReduced = useReducedMotion();
+  const reduced = data.preferences.motion === 'compact' || systemReduced;
   const rewardRef = useRef(null);
   const focusNoticeTimerRef = useRef(null);
   const hiddenSinceRef = useRef(null);

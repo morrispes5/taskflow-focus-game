@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays } from 'date-fns';
 import {
-  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, finishFocusRun, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDashboardStats, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
+  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, finishFocusRun, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDashboardStats, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, getDisplayStreak, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
   getProfileRecommendations, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
   getSemesterWeek, replaceActiveFocus, resumeDistraction, selectDailyMission, selectReviewTask, sortTasks, spawnNextOccurrence, todayString, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput,
   validateMeetingInput, generateDefaultMeetings, getSemesterSksSummary, getCourseMeetingsProgress, getRoleTerminology
@@ -372,5 +372,39 @@ describe('task domain', () => {
     expect(recurringNext.meetingNumber).toBe(1);
     expect(recurringNext.courseId).toBe(10);
     expect(recurringNext.dueDate).toBe('2026-09-08');
+  });
+});
+
+describe('getDisplayStreak', () => {
+  const base = (overrides = {}) => ({ totalXp: 0, level: 1, currentStreak: 7, bestStreak: 9, lastActiveDate: '2026-08-30', streakFreezeMonth: '2026-08', streakFreezesUsed: 0, ...overrides });
+
+  it('mempertahankan streak saat aktif hari ini atau kemarin', () => {
+    expect(getDisplayStreak(base(), '2026-08-30')).toMatchObject({ value: 7, broken: false });
+    expect(getDisplayStreak(base(), '2026-08-31')).toMatchObject({ value: 7, broken: false });
+  });
+
+  it('mempertahankan streak selama kuota freeze bulan itu masih menutupi hari terlewat', () => {
+    expect(getDisplayStreak(base(), '2026-09-01')).toMatchObject({ value: 7, broken: false });
+    expect(getDisplayStreak(base(), '2026-09-02')).toMatchObject({ value: 7, broken: false });
+  });
+
+  it('menandai streak putus ketika hari terlewat melebihi kuota freeze', () => {
+    expect(getDisplayStreak(base(), '2026-09-14')).toMatchObject({ value: 0, broken: true, bestStreak: 9 });
+  });
+
+  it('menghormati freeze yang sudah terpakai bulan berjalan', () => {
+    const used = base({ lastActiveDate: '2026-08-26', streakFreezesUsed: 3 });
+    expect(getDisplayStreak(used, '2026-08-28')).toMatchObject({ value: 0, broken: true });
+  });
+
+  it('tidak menyatakan putus tanpa lastActiveDate atau tanpa streak', () => {
+    expect(getDisplayStreak(base({ lastActiveDate: null }), '2026-09-14')).toMatchObject({ value: 7, broken: false });
+    expect(getDisplayStreak(base({ currentStreak: 0 }), '2026-09-14')).toMatchObject({ value: 0, broken: false });
+  });
+
+  it('setuju dengan updateStreak: yang ditampilkan putus juga direset olehnya', () => {
+    const stale = base();
+    expect(getDisplayStreak(stale, '2026-09-14').broken).toBe(true);
+    expect(updateStreak(stale, '2026-09-14').currentStreak).toBe(1);
   });
 });

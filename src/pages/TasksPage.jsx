@@ -24,6 +24,8 @@ export function TasksPage({ data, commit, toggleTask }) {
   useEffect(() => {
     const focusQuickAdd = (event) => {
       const tagName = event.target?.tagName;
+      // Jangan bajak Ctrl+N / Cmd+N milik browser, dan jangan aktif saat mengetik.
+      if (event.ctrlKey || event.metaKey || event.altKey || event.target?.isContentEditable) return;
       if (event.key.toLowerCase() !== 'n' || ['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName)) return;
       event.preventDefault();
       quickInputRef.current?.focus();
