@@ -77,6 +77,16 @@ Meeting = {
 - `meetings` berisi daftar pertemuan (standar 16 pertemuan kuliah dengan UTS di P8 & UAS di P16, atau 4 milestone proyek untuk pengguna profesional).
 - Antarmuka beradaptasi sesuai `profile.role` (*Progressive Disclosure*): mahasiswa/pelajar mendapatkan istilah akademik (*Mata Kuliah*, *SKS*, *Pertemuan*), sedangkan profesional/lainnya mendapatkan istilah proyek (*Proyek*, *Bobot*, *Milestone*).
 
+## Snapshot pemulihan
+
+Key ketiga pada store yang sama: `app-data-snapshot`, berisi `{ data, savedAt, reason }`.
+
+Snapshot **tidak** ikut pada jalur tulis biasa. Ia hanya diambil tepat sebelum operasi yang memang menghancurkan data, yaitu reset (`reason: 'reset'`) dan import (`reason: 'import'`), serta saat memulihkan dari Pengaturan (`reason: 'pemulihan'`). Penulisannya memakai transaksi sendiri dan kegagalannya ditelan, sehingga kode snapshot tidak pernah bisa membatalkan penyimpanan pengguna. `app-data` dan `workspace-meta` tidak tersentuh, jadi revision tidak berubah.
+
+Snapshot tidak ikut ke backup JSON dan tidak dihitung sebagai bagian dari `schemaVersion`.
+
+Pemulihan dari gerbang profil (setelah reset) sengaja **tidak** mengambil snapshot lebih dulu: workspace saat itu kosong, dan menyimpannya akan menimpa satu-satunya titik pulih yang ada.
+
 ## Preferensi v6
 
 | Field | Nilai | Default migrasi |
@@ -122,6 +132,8 @@ Tracker ini manual. TaskFlow tidak mendeteksi atau membaca aplikasi/tab lain, da
 Tugas masuk semester jika `dueDate` (atau `completedAt` / `createdAt` jika tidak ada deadline) berada di `startDate`–`endDate` (inklusif). Sesi fokus memakai `endedAt` atau `startedAt`. Batas boleh terbuka: hanya mulai, atau hanya selesai.
 
 ## Backup
+
+Preferensi juga memuat `lastBackupAt` (epoch milidetik atau `null`), field additive di dalam v8 yang dicatat saat pengguna menekan Export JSON. Workspace lama tanpa nilai ini tetap sah dan mendapat `null`. `SCHEMA_VERSION` dan `BACKUP_VERSION` tetap 8.
 
 `createBackup()` menulis `version: 8` plus `courses` (termasuk `meetings`), `semester`, preferensi soundscape, dan histori distraksi sesi.
 `parseBackupPayload()` menerima array tugas mentah (legacy), backup v4, v5, v6, v7, dan v8.

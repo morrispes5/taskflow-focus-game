@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.3.0 - Guardrail, perbaikan bug, performa, dan keamanan data
+
+- **Guardrail**: ESLint dengan `react-hooks/rules-of-hooks`, tes komponen aktif di jsdom, `script.js` legacy dihapus.
+- **Bug**: `useReducedMotion` tidak lagi dipanggil bersyarat di Focus Run; streak yang ditampilkan tidak lagi basi ketika pengguna absen berhari-hari; id judul dialog kini unik per instance; shortcut `N` tidak lagi membajak `Ctrl+N`.
+- **Performa**: aset turun dari 40 MB ke 7,1 MB (audio 32,8 MB ke 6,2 MB, ilustrasi PNG 6,35 MB ke WebP 179 KB). Halaman dipecah lewat `React.lazy` sehingga chunk bersama turun dari 560 kB ke 425 kB. Service worker memakai cache-first untuk aset dan network-first untuk dokumen, `CACHE` naik ke `taskflow-v5`.
+- **Keamanan data**: snapshot otomatis diambil sebelum reset dan import, dengan pemulihan dari Pengaturan maupun dari gerbang profil. Preferensi mencatat `lastBackupAt` dan menampilkan pengingat export yang tenang. Tersedia opsi menandai penyimpanan sebagai persisten.
+- Skema tetap **v8**; seluruh perubahan additive dan tidak menyentuh data yang sudah berjalan.
+
 ## 5.2.3 - Storage security hardening
 
 - Migrasi `localStorage` legacy kini additive: data dipindahkan saat IndexedDB kosong dan key lama baru dibersihkan setelah transaksi sukses.

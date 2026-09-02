@@ -6,7 +6,7 @@ import { getDisplayStreak } from '../lib/domain.js';
 import { OnboardingTour, ProfileGate } from './Onboarding.jsx';
 import { ReminderBanner } from './ui.jsx';
 
-export function AppShell({ page, profile, progress, onboarding, notice, tourOpen, reminders = [], onCompleteProfile, onCloseTutorial, onOpenReminders, children }) {
+export function AppShell({ page, profile, progress, onboarding, notice, tourOpen, reminders = [], onCompleteProfile, onCloseTutorial, onOpenReminders, recoverySnapshot = null, onRestoreSnapshot, children }) {
   const meta = PAGE_META[page] || PAGE_META.home;
   const streak = getDisplayStreak(progress);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -33,7 +33,7 @@ export function AppShell({ page, profile, progress, onboarding, notice, tourOpen
         </nav>
       </header>
       <main className="container page-shell">
-        {!onboarding.profileCompleted ? <ProfileGate profile={profile} onComplete={onCompleteProfile} /> : <>
+        {!onboarding.profileCompleted ? <ProfileGate profile={profile} onComplete={onCompleteProfile} recoverySnapshot={recoverySnapshot} onRestoreSnapshot={onRestoreSnapshot} /> : <>
         {page !== 'focus' && page !== 'home' && (
           <motion.section className="page-heading" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28 }}>
             <div>

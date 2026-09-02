@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, CircleHelp, Download, Sparkles, Trash2, Upload, Zap } from 'lucide-react';
-import { createBackup, parseBackupPayload, validateBackupFile, DEFAULT_PROFILE, FOCUS_SOUNDSCAPES, FOCUS_SOUNDSCAPE_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES } from '../lib/storage.js';
-import { makeCourse, validateProfileInput, validateSemesterInput, getRoleTerminology, getDisplayStreak, makeTask } from '../lib/domain.js';
+import { Check, CircleHelp, Download, History, ShieldCheck, Sparkles, Trash2, Upload, Zap } from 'lucide-react';
+import { createBackup, parseBackupPayload, validateBackupFile, captureWorkspaceSnapshot, loadWorkspaceSnapshot, DEFAULT_PROFILE, FOCUS_SOUNDSCAPES, FOCUS_SOUNDSCAPE_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES } from '../lib/storage.js';
+import { makeCourse, validateProfileInput, validateSemesterInput, formatSnapshotLabel, getBackupReminder, getRoleTerminology, getDisplayStreak, makeTask } from '../lib/domain.js';
 import { requestNotifyPermission } from '../lib/reminders.js';
 import { ConfirmDialog } from '../components/ui.jsx';
 import { CourseManager } from '../components/CourseForm.jsx';
@@ -11,11 +11,18 @@ export function SettingsPage({ data, commit, updatePreferences, onStartTutorial,
   const [semester, setSemester] = useState(data.semester || { name: '', startDate: '', endDate: '' });
   const [status, setStatus] = useState({ text: '', error: false });
   const [confirm, setConfirm] = useState(null);
+  const [snapshot, setSnapshot] = useState(null);
+  const [persisted, setPersisted] = useState(null);
   const fileRef = useRef(null);
   const terms = getRoleTerminology(data.profile.role);
   const streak = getDisplayStreak(data.progress);
+  const backupReminder = getBackupReminder(data);
   useEffect(() => setProfile(data.profile), [data.profile]);
   useEffect(() => setSemester(data.semester || { name: '', startDate: '', endDate: '' }), [data.semester]);
+  const refreshSnapshot = () => { loadWorkspaceSnapshot().then(setSnapshot).catch(() => setSnapshot(null)); };
+  useEffect(() => { refreshSnapshot(); }, [data]);
+  // persisted() tidak memunculkan permintaan izin; hanya persist() yang bisa.
+  useEffect(() => { navigator.storage?.persisted?.().then(setPersisted).catch(() => setPersisted(null)); }, []);
   const saveProfile = (event) => { event.preventDefault(); const validation = validateProfileInput(profile); if (validation) { setStatus({ text: validation.message, error: true }); return; } commit((current) => ({ ...current, profile: { ...current.profile, name: profile.name.trim(), role: profile.role, goal: profile.goal.trim(), tagline: profile.tagline.trim() || DEFAULT_PROFILE.tagline }, onboarding: { ...current.onboarding, profileCompleted: true } })); setStatus({ text: 'Profil tersimpan.', error: false }); };
   const saveSemester = (event) => {
     event.preventDefault();
@@ -24,10 +31,35 @@ export function SettingsPage({ data, commit, updatePreferences, onStartTutorial,
     commit((current) => ({ ...current, semester: semester.name.trim() || semester.startDate || semester.endDate ? { name: semester.name.trim() || 'Semester berjalan', startDate: semester.startDate || null, endDate: semester.endDate || null } : null }));
     setStatus({ text: 'Semester disimpan.', error: false });
   };
-  const exportData = () => { const blob = new Blob([JSON.stringify(createBackup(data), null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'taskflow-backup.json'; anchor.click(); URL.revokeObjectURL(url); setStatus({ text: 'Backup berhasil dibuat.', error: false }); };
+  const exportData = () => { const blob = new Blob([JSON.stringify(createBackup(data), null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'taskflow-backup.json'; anchor.click(); URL.revokeObjectURL(url); commit((current) => ({ ...current, preferences: { ...current.preferences, lastBackupAt: Date.now() } })); setStatus({ text: 'Backup berhasil dibuat.', error: false }); };
   const importData = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { validateBackupFile(file); const parsed = parseBackupPayload(JSON.parse(await file.text())); setConfirm({ type: 'import', data: parsed, title: 'Pulihkan backup ini?', message: `Backup berisi ${parsed.tasks.length} tugas dan ${parsed.courses.length} mata kuliah, dan akan menggantikan data lokal saat ini.` }); } catch (error) { setStatus({ text: error.message || 'File JSON tidak bisa dibaca.', error: true }); } event.target.value = ''; };
   const resetAll = () => setConfirm({ type: 'reset', title: 'Mulai workspace baru?', message: 'Tugas, mata kuliah, profil, sesi fokus, XP, preferensi, dan status tutorial di perangkat ini akan dihapus. Kamu akan kembali ke pengisian profil.' });
-  const confirmAction = async () => { if (confirm?.type === 'import') { try { await commit(() => confirm.data); setStatus({ text: 'Data berhasil dipulihkan.', error: false }); } catch (error) { setStatus({ text: error.message || 'Data belum dapat dipulihkan.', error: true }); } } if (confirm?.type === 'reset') { try { await onResetWorkspace(); setStatus({ text: 'Workspace baru siap digunakan.', error: false }); } catch { setStatus({ text: 'Workspace belum dapat direset.', error: true }); } } setConfirm(null); };
+  const confirmAction = async () => {
+    if (confirm?.type === 'import') {
+      // Import mengganti seluruh workspace, jadi keadaan sekarang diamankan lebih
+      // dulu. captureWorkspaceSnapshot memang tidak pernah melempar.
+      try { await captureWorkspaceSnapshot('import'); await commit(() => confirm.data); setStatus({ text: 'Data berhasil dipulihkan. Keadaan sebelumnya tersimpan sebagai snapshot.', error: false }); }
+      catch (error) { setStatus({ text: error.message || 'Data belum dapat dipulihkan.', error: true }); }
+    }
+    if (confirm?.type === 'reset') {
+      try { await onResetWorkspace(); setStatus({ text: 'Workspace baru siap digunakan. Keadaan sebelumnya tersimpan sebagai snapshot.', error: false }); }
+      catch { setStatus({ text: 'Workspace belum dapat direset.', error: true }); }
+    }
+    if (confirm?.type === 'snapshot') {
+      try { await captureWorkspaceSnapshot('pemulihan'); await commit(() => confirm.data); setStatus({ text: 'Snapshot dipulihkan.', error: false }); }
+      catch (error) { setStatus({ text: error.message || 'Snapshot belum dapat dipulihkan.', error: true }); }
+    }
+    setConfirm(null);
+    refreshSnapshot();
+  };
+  const restoreSnapshot = () => setConfirm({ type: 'snapshot', data: snapshot.data, title: 'Pulihkan snapshot otomatis?', message: `Snapshot ${formatSnapshotLabel(snapshot)} berisi ${snapshot.data.tasks.length} tugas dan akan menggantikan data saat ini. Keadaan sekarang ikut disimpan sebagai snapshot baru.` });
+  const enablePersistentStorage = async () => {
+    const granted = await navigator.storage?.persist?.().catch(() => false);
+    setPersisted(Boolean(granted));
+    setStatus(granted
+      ? { text: 'Data ditandai persisten. Peramban tidak akan membersihkannya otomatis saat penyimpanan menipis.', error: false }
+      : { text: 'Peramban belum memberi status persisten. Export JSON berkala tetap cara paling aman.', error: true });
+  };
   const saveCourse = (input, id) => commit((current) => {
     const course = makeCourse(input, id || Date.now());
     const courses = id ? current.courses.map((item) => item.id === id ? { ...item, ...course, id } : item) : [...current.courses, course];
@@ -76,7 +108,29 @@ export function SettingsPage({ data, commit, updatePreferences, onStartTutorial,
       <label className="setting-row"><span><strong>Pengingat browser</strong><small>Hanya berjalan saat TaskFlow terbuka atau terpasang sebagai aplikasi.</small></span><button className="btn btn-secondary" type="button" onClick={enableNotify}>{data.preferences.notify ? 'Izin sudah aktif' : 'Izinkan pengingat'}</button></label>
     </div></article>
     <article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Bantuan</p><h2>Kenali TaskFlow lagi</h2></div><span className="card-icon"><CircleHelp size={18} /></span></div><p className="muted">Jalankan kembali tutorial visual tanpa mengubah data tugasmu.</p><button className="btn btn-secondary" type="button" onClick={onStartTutorial}><CircleHelp size={16} />Mulai tutorial lagi</button></article>
-    <article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Backup dan pemulihan</p><h2>Data tetap di perangkat ini</h2></div><span className="card-icon"><Download size={18} /></span></div><p className="muted">Backup menyimpan tugas, mata kuliah, profil, XP, sesi fokus, dan preferensi dalam satu file JSON.</p><div className="action-row"><button className="btn btn-secondary" type="button" onClick={exportData}><Download size={16} />Export JSON</button><button className="btn btn-secondary" type="button" onClick={() => fileRef.current?.click()}><Upload size={16} />Import JSON</button><input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={importData} /></div></article>
+    <article className="card settings-card">
+      <div className="card-header"><div><p className="section-kicker">Backup dan pemulihan</p><h2>Data tetap di perangkat ini</h2></div><span className="card-icon"><Download size={18} /></span></div>
+      <p className="muted">Backup menyimpan tugas, mata kuliah, profil, XP, sesi fokus, dan preferensi dalam satu file JSON.</p>
+      {backupReminder && <p className="muted">{backupReminder.text}</p>}
+      <div className="action-row">
+        <button className="btn btn-secondary" type="button" onClick={exportData}><Download size={16} />Export JSON</button>
+        <button className="btn btn-secondary" type="button" onClick={() => fileRef.current?.click()}><Upload size={16} />Import JSON</button>
+        <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={importData} />
+      </div>
+      {snapshot && (
+        <>
+          <p className="muted">TaskFlow menyimpan satu salinan otomatis tepat sebelum import atau reset. Salinan terakhir dibuat {formatSnapshotLabel(snapshot)} dan berisi {snapshot.data.tasks.length} tugas.</p>
+          <div className="action-row"><button className="btn btn-secondary" type="button" onClick={restoreSnapshot}><History size={16} />Pulihkan snapshot otomatis</button></div>
+        </>
+      )}
+      {persisted === false && (
+        <>
+          <p className="muted">Peramban boleh membersihkan penyimpanan situs saat ruang menipis. Menandai data sebagai persisten menurunkan risiko itu.</p>
+          <div className="action-row"><button className="btn btn-secondary" type="button" onClick={enablePersistentStorage}><ShieldCheck size={16} />Lindungi data di perangkat ini</button></div>
+        </>
+      )}
+      {persisted === true && <p className="muted"><ShieldCheck size={14} /> Data sudah ditandai persisten oleh peramban ini.</p>}
+    </article>
     <article className="card danger-card"><div className="card-header"><div><p className="section-kicker danger-text">Perangkat bersama</p><h2>Mulai workspace baru</h2></div><span className="card-icon card-icon-danger"><Trash2 size={18} /></span></div><p className="muted">Hapus semua data lokal perangkat ini agar pengguna berikutnya dapat mengisi profil dan mengikuti tutorial dari awal.</p><button className="btn btn-danger" type="button" onClick={resetAll}><Trash2 size={16} />Mulai workspace baru</button></article>
   </div><aside className="settings-aside"><div className="settings-profile"><span className="profile-orbit"><span>{(data.profile.name || 'V').slice(0, 1).toUpperCase()}</span></span><p className="eyebrow">Level {data.progress.level}</p><h2>{data.profile.name || 'Pengguna baru'}</h2><p>{data.profile.goal || data.profile.tagline}</p><div className="aside-stats"><span><strong>{data.progress.totalXp}</strong> XP</span><span title={streak.broken ? `Streak putus. Terbaik ${streak.bestStreak} hari.` : undefined}><strong>{streak.value}</strong> hari streak</span></div></div><div className="help-note"><CircleHelp size={18} /><div><strong>Ruang yang tenang</strong><p>TaskFlow menyimpan data di browser perangkat ini dan tidak membutuhkan akun.</p></div></div></aside><ConfirmDialog open={Boolean(confirm)} title={confirm?.title} message={confirm?.message} confirmLabel={confirm?.type === 'import' ? 'Pulihkan data' : 'Mulai baru'} danger={confirm?.type === 'reset'} onClose={() => setConfirm(null)} onConfirm={confirmAction} /></section>;
 }

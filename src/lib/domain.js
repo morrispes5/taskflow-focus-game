@@ -938,6 +938,26 @@ export function updateStreak(progress, dateKey) {
   return next;
 }
 
+export function formatSnapshotLabel(snapshot) {
+  const savedAt = Number(snapshot?.savedAt);
+  if (!Number.isFinite(savedAt) || savedAt <= 0) return 'tanpa tanggal';
+  return new Date(savedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+export const BACKUP_REMINDER_DAYS = 14;
+
+// Data TaskFlow hanya ada di peramban perangkat ini. Pengingat ini muncul
+// tenang di kartu backup, bukan sebagai banner global.
+export function getBackupReminder(data, now = Date.now()) {
+  const hasData = Boolean(data?.tasks?.length || data?.sessions?.length);
+  if (!hasData) return null;
+  const lastBackupAt = Number(data?.preferences?.lastBackupAt);
+  if (!Number.isFinite(lastBackupAt) || lastBackupAt <= 0) return { days: null, text: 'Kamu belum pernah membuat backup. Semua data ini hanya ada di peramban perangkat ini.' };
+  const days = Math.floor((now - lastBackupAt) / 86400000);
+  if (days < BACKUP_REMINDER_DAYS) return null;
+  return { days, text: `Backup terakhir ${days} hari lalu. Export lagi agar progresmu punya salinan di luar peramban.` };
+}
+
 export function resolveTheme(preference, systemDark) {
   if (preference === 'dark') return 'dark';
   if (preference === 'light') return 'light';

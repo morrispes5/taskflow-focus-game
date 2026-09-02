@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MotionConfig } from 'motion/react';
-import { loadAppData, saveAppData, resetAppData, WorkspaceConflictError } from './lib/storage.js';
+import { loadAppData, saveAppData, resetAppData, loadWorkspaceSnapshot, WorkspaceConflictError } from './lib/storage.js';
 import { applyTaskToggle, resolveTheme } from './lib/domain.js';
 import { getDueReminders, markRemindersNotified, sendNotification } from './lib/reminders.js';
 import { playFeedbackTone } from './lib/audio.js';
@@ -33,6 +33,7 @@ export default function TaskFlowApp() {
   const [notice, setNotice] = useState(null);
   const [storageError, setStorageError] = useState(null);
   const [tourOpen, setTourOpen] = useState(false);
+  const [recoverySnapshot, setRecoverySnapshot] = useState(null);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.('(prefers-color-scheme: dark)').matches);
   const dataRef = useRef(data);
   const revisionRef = useRef(0);
@@ -105,6 +106,22 @@ export default function TaskFlowApp() {
     media.addEventListener('change', onChange);
     return () => media.removeEventListener('change', onChange);
   }, []);
+
+  // Reset mengembalikan pengguna ke gerbang profil, tempat Pengaturan tidak
+  // terjangkau. Tanpa jalan pulih di sini, snapshot jadi tidak berguna justru
+  // pada skenario yang paling membutuhkannya.
+  const profileCompleted = data?.onboarding.profileCompleted;
+  useEffect(() => {
+    if (profileCompleted !== false) { setRecoverySnapshot(null); return; }
+    loadWorkspaceSnapshot().then(setRecoverySnapshot).catch(() => setRecoverySnapshot(null));
+  }, [profileCompleted]);
+
+  // Sengaja tidak mengambil snapshot lebih dulu: workspace saat ini kosong dan
+  // menyimpannya justru akan menimpa satu-satunya titik pulih yang ada.
+  const restoreRecoverySnapshot = () => {
+    if (!recoverySnapshot) return undefined;
+    return commit(() => recoverySnapshot.data, 'Snapshot dipulihkan.');
+  };
 
   const theme = data ? resolveTheme(data.preferences.theme, systemDark) : 'light';
 
@@ -201,7 +218,7 @@ export default function TaskFlowApp() {
 
   return (
     <MotionConfig reducedMotion={data.preferences.motion === 'compact' ? 'always' : 'user'}>
-      <AppShell page={page} profile={data.profile} progress={data.progress} onboarding={data.onboarding} notice={notice} tourOpen={tourOpen} reminders={reminders} onCompleteProfile={completeProfile} onCloseTutorial={closeTutorial} onOpenReminders={() => { window.location.href = 'calendar.html'; }}>
+      <AppShell page={page} profile={data.profile} progress={data.progress} onboarding={data.onboarding} notice={notice} tourOpen={tourOpen} reminders={reminders} onCompleteProfile={completeProfile} recoverySnapshot={recoverySnapshot} onRestoreSnapshot={restoreRecoverySnapshot} onCloseTutorial={closeTutorial} onOpenReminders={() => { window.location.href = 'calendar.html'; }}>
         {/* Setiap halaman hanya memakai prop yang relevan baginya; sisanya diabaikan. */}
         <Suspense fallback={null}>
           <ActivePage data={data} commit={commit} toggleTask={toggleTask} updatePreferences={updatePreferences} onStartTutorial={() => setTourOpen(true)} onResetWorkspace={resetWorkspace} />

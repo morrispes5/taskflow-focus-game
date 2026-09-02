@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays } from 'date-fns';
 import {
-  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, finishFocusRun, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDashboardStats, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, getDisplayStreak, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
+  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, finishFocusRun, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDashboardStats, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, getBackupReminder, getDisplayStreak, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
   getProfileRecommendations, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
   getSemesterWeek, replaceActiveFocus, resumeDistraction, selectDailyMission, selectReviewTask, sortTasks, spawnNextOccurrence, todayString, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput,
   validateMeetingInput, generateDefaultMeetings, getSemesterSksSummary, getCourseMeetingsProgress, getRoleTerminology
@@ -406,5 +406,32 @@ describe('getDisplayStreak', () => {
     const stale = base();
     expect(getDisplayStreak(stale, '2026-09-14').broken).toBe(true);
     expect(updateStreak(stale, '2026-09-14').currentStreak).toBe(1);
+  });
+});
+
+describe('getBackupReminder', () => {
+  const at = Date.parse('2026-09-02T10:00:00Z');
+  const workspace = (lastBackupAt, extra = {}) => ({ tasks: [task()], sessions: [], preferences: { lastBackupAt }, ...extra });
+
+  it('diam saja pada workspace yang masih kosong', () => {
+    expect(getBackupReminder({ tasks: [], sessions: [], preferences: { lastBackupAt: null } }, at)).toBeNull();
+  });
+
+  it('mengingatkan pengguna yang belum pernah membuat backup', () => {
+    expect(getBackupReminder(workspace(null), at)).toMatchObject({ days: null });
+  });
+
+  it('diam selama backup masih baru', () => {
+    expect(getBackupReminder(workspace(at - 3 * 86400000), at)).toBeNull();
+    expect(getBackupReminder(workspace(at - 13 * 86400000), at)).toBeNull();
+  });
+
+  it('mengingatkan setelah ambang hari terlampaui', () => {
+    expect(getBackupReminder(workspace(at - 14 * 86400000), at)).toMatchObject({ days: 14 });
+    expect(getBackupReminder(workspace(at - 40 * 86400000), at)).toMatchObject({ days: 40 });
+  });
+
+  it('memperlakukan sesi fokus sebagai data yang layak di-backup', () => {
+    expect(getBackupReminder({ tasks: [], sessions: [{ id: 1 }], preferences: { lastBackupAt: null } }, at)).not.toBeNull();
   });
 });
