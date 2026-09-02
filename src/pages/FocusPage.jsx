@@ -314,7 +314,21 @@ export function FocusPage({ data, commit, toggleTask }) {
       {focus && <DistractionTracker isDistracted={isDistracted} summary={distractionSummary} message={distractionMessage} />}
       <FocusDesk task={task} course={course} meeting={meeting} terms={terms} preferences={data.preferences} soundEnabled={soundEnabled} onSelectSoundscape={setSoundscape} />
       {isReady && <form className="custom-focus" onSubmit={(event) => { event.preventDefault(); startFocus(customMinutes); }}><label htmlFor="custom-focus">{isReviewReady ? 'Durasi review custom (5-180 menit)' : 'Durasi custom (5-180 menit)'}</label><input id="custom-focus" className="input" type="number" min="5" max="180" value={customMinutes} onChange={(event) => setCustomMinutes(event.target.value)} /><button className="btn btn-secondary" type="submit">{isReviewReady ? 'Mulai review custom' : 'Mulai custom'}</button></form>}
-      {task.subtasks?.length > 0 && <section className="focus-checklist"><div><p className="section-kicker">Checklist</p><h2>{subtaskProgress.done}/{subtaskProgress.total} langkah selesai</h2></div><div className="focus-progress"><motion.span animate={{ width: `${Math.round(subtaskProgress.ratio * 100)}%` }} transition={{ duration: reduced ? 0.12 : 0.28 }} /></div><ul className="focus-subtasks">{task.subtasks.map((item) => <motion.li key={item.id} layout><label><input type="checkbox" checked={item.completed} onChange={() => toggleSubtask(item.id)} /><span>{item.text}</span></label></motion.li>)}</ul></section>}
+      {task.subtasks?.length > 0 && (
+        <section className="focus-checklist">
+          <div><p className="section-kicker">Checklist</p><h2>{subtaskProgress.done}/{subtaskProgress.total} langkah selesai</h2></div>
+          <div className="focus-progress">
+            <motion.span animate={{ width: `${Math.round(subtaskProgress.ratio * 100)}%` }} transition={{ duration: reduced ? 0.12 : 0.28 }} />
+          </div>
+          <ul className="focus-subtasks">
+            {task.subtasks.map((item) => (
+              <motion.li key={item.id} layout>
+                <label><input type="checkbox" checked={item.completed} onChange={() => toggleSubtask(item.id)} /><span>{item.text}</span></label>
+              </motion.li>
+            ))}
+          </ul>
+        </section>
+      )}
       <FocusControls status={status} controls={controls} taskFocusMinutes={taskFocusMinutes} sessionXp={sessionXp} reduced={reduced} actions={focusActions} />
       <FocusRecap open={isBreak} isReviewSession={isReviewSession} activeSeconds={liveSeconds} sessionXp={sessionXp} subtaskProgress={subtaskProgress} distractionSummary={distractionSummary} note={sessionNote} onNoteChange={setSessionNote} reduced={reduced} />
       <div ref={rewardRef} className="focus-reward"><span><Zap size={15} />{isReviewSession ? 'Review tanpa XP' : `+${isBreak ? sessionXp : 0} XP sesi`}</span><span><Trophy size={15} />{data.progress.totalXp} XP total</span></div>

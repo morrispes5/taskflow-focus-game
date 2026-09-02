@@ -11,7 +11,53 @@ export function ProfileGate({ profile, onComplete, recoverySnapshot = null, onRe
   useEffect(() => { requestAnimationFrame(() => nameRef.current?.focus()); }, []);
   const setField = (field, value) => { setForm((current) => ({ ...current, [field]: value })); if (error?.field === field) setError(null); };
   const submit = (event) => { event.preventDefault(); const validation = validateProfileInput(form); if (validation) { setError(validation); return; } onComplete(form); };
-  return <section className="first-run-shell" aria-labelledby="profile-gate-title"><div className="profile-gate"><div className="profile-gate-copy"><p className="eyebrow">Ruang fokus pribadimu</p><h1 id="profile-gate-title">Mulai dari hal yang penting buatmu.</h1><p>TaskFlow akan memakai sedikit konteks ini untuk menyusun langkah yang terasa relevan. Semua informasi hanya disimpan di browser ini.</p><Illustration type="milestone" alt="Ilustrasi memulai perjalanan fokus" className="profile-gate-illustration" /></div><form className="profile-gate-form form-stack" onSubmit={submit}><div><p className="section-kicker">Kenalan sebentar</p><h2>Isi profilmu dulu</h2><p className="muted">Tidak perlu akun. Cukup tiga hal untuk memulai.</p></div><div className="field-group"><label htmlFor="onboarding-name">Nama panggilan</label><input ref={nameRef} id="onboarding-name" className="input" value={form.name} onChange={(event) => setField('name', event.target.value)} maxLength={40} autoComplete="nickname" aria-invalid={error?.field === 'name'} aria-describedby="onboarding-name-error" placeholder="Contoh: Vio" /><p id="onboarding-name-error" className="field-error" role="alert">{error?.field === 'name' ? error.message : ''}</p></div><div className="field-group"><label htmlFor="onboarding-role">Peranmu</label><select id="onboarding-role" className="input" value={form.role} onChange={(event) => setField('role', event.target.value)} aria-invalid={error?.field === 'role'}><option value="">Pilih peran</option>{PROFILE_ROLES.map((role) => <option key={role} value={role}>{PROFILE_ROLE_LABELS[role]}</option>)}</select><p className="field-error" role="alert">{error?.field === 'role' ? error.message : ''}</p></div><div className="field-group"><label htmlFor="onboarding-goal">Tujuan utama saat ini</label><textarea id="onboarding-goal" className="input" value={form.goal} onChange={(event) => setField('goal', event.target.value)} maxLength={120} aria-invalid={error?.field === 'goal'} aria-describedby="onboarding-goal-error" placeholder="Contoh: Menyelesaikan proyek akhir dengan lebih teratur" /><p id="onboarding-goal-error" className="field-error" role="alert">{error?.field === 'goal' ? error.message : ''}</p></div><button className="btn btn-primary btn-large" type="submit"><Sparkles size={18} />Mulai ruang fokus</button><p className="form-note"><CircleHelp size={14} />Profil ini tidak dikirim ke mana pun.</p>{recoverySnapshot && <p className="form-note"><History size={14} />Mereset tanpa sengaja? <button className="text-link" type="button" onClick={onRestoreSnapshot}>Pulihkan {recoverySnapshot.data.tasks.length} tugas dari snapshot {formatSnapshotLabel(recoverySnapshot)}</button></p>}</form></div></section>;
+  return (
+    <section className="first-run-shell" aria-labelledby="profile-gate-title">
+      <div className="profile-gate">
+        <div className="profile-gate-copy">
+          <p className="eyebrow">Ruang fokus pribadimu</p>
+          <h1 id="profile-gate-title">Mulai dari hal yang penting buatmu.</h1>
+          <p>TaskFlow akan memakai sedikit konteks ini untuk menyusun langkah yang terasa relevan. Semua informasi hanya disimpan di browser ini.</p>
+          <Illustration type="milestone" alt="Ilustrasi memulai perjalanan fokus" className="profile-gate-illustration" />
+        </div>
+        <form className="profile-gate-form form-stack" onSubmit={submit}>
+          <div>
+            <p className="section-kicker">Kenalan sebentar</p>
+            <h2>Isi profilmu dulu</h2>
+            <p className="muted">Tidak perlu akun. Cukup tiga hal untuk memulai.</p>
+          </div>
+          <div className="field-group">
+            <label htmlFor="onboarding-name">Nama panggilan</label>
+            <input ref={nameRef} id="onboarding-name" className="input" value={form.name} onChange={(event) => setField('name', event.target.value)} maxLength={40} autoComplete="nickname" aria-invalid={error?.field === 'name'} aria-describedby="onboarding-name-error" placeholder="Contoh: Vio" />
+            <p id="onboarding-name-error" className="field-error" role="alert">{error?.field === 'name' ? error.message : ''}</p>
+          </div>
+          <div className="field-group">
+            <label htmlFor="onboarding-role">Peranmu</label>
+            <select id="onboarding-role" className="input" value={form.role} onChange={(event) => setField('role', event.target.value)} aria-invalid={error?.field === 'role'}>
+              <option value="">Pilih peran</option>
+              {PROFILE_ROLES.map((role) => <option key={role} value={role}>{PROFILE_ROLE_LABELS[role]}</option>)}
+            </select>
+            <p className="field-error" role="alert">{error?.field === 'role' ? error.message : ''}</p>
+          </div>
+          <div className="field-group">
+            <label htmlFor="onboarding-goal">Tujuan utama saat ini</label>
+            <textarea id="onboarding-goal" className="input" value={form.goal} onChange={(event) => setField('goal', event.target.value)} maxLength={120} aria-invalid={error?.field === 'goal'} aria-describedby="onboarding-goal-error" placeholder="Contoh: Menyelesaikan proyek akhir dengan lebih teratur" />
+            <p id="onboarding-goal-error" className="field-error" role="alert">{error?.field === 'goal' ? error.message : ''}</p>
+          </div>
+          <button className="btn btn-primary btn-large" type="submit"><Sparkles size={18} />Mulai ruang fokus</button>
+          <p className="form-note"><CircleHelp size={14} />Profil ini tidak dikirim ke mana pun.</p>
+          {recoverySnapshot && (
+            <p className="form-note">
+              <History size={14} />Mereset tanpa sengaja?{' '}
+              <button className="text-link" type="button" onClick={onRestoreSnapshot}>
+                Pulihkan {recoverySnapshot.data.tasks.length} tugas dari snapshot {formatSnapshotLabel(recoverySnapshot)}
+              </button>
+            </p>
+          )}
+        </form>
+      </div>
+    </section>
+  );
 }
 
 const TOUR_STEPS = [
@@ -55,5 +101,26 @@ export function OnboardingTour({ onComplete, onSkip }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onSkip, stepIndex]);
   const next = () => { if (stepIndex === TOUR_STEPS.length - 1) onComplete(); else setStepIndex((current) => current + 1); };
-  return <div className="tour-layer"><div className="tour-overlay" aria-hidden="true" />{targetRect && <div className="tour-spotlight" aria-hidden="true" style={{ top: targetRect.top - 8, left: targetRect.left - 8, width: targetRect.width + 16, height: targetRect.height + 16 }} />}<section ref={cardRef} className="tour-card" role="dialog" aria-modal="true" aria-labelledby="tour-title" tabIndex="-1"><div className="tour-card-topline"><span className="section-kicker">Panduan TaskFlow</span><span>{stepIndex + 1} / {TOUR_STEPS.length}</span></div><h2 id="tour-title">{step.title}</h2><p>{step.description}</p><div className="tour-progress" aria-hidden="true"><span style={{ width: `${((stepIndex + 1) / TOUR_STEPS.length) * 100}%` }} /></div><div className="tour-actions"><button className="btn btn-ghost" type="button" onClick={onSkip}>Lewati tutorial</button><div><button className="btn btn-secondary" type="button" onClick={() => setStepIndex((current) => Math.max(0, current - 1))} disabled={stepIndex === 0}>Kembali</button><button className="btn btn-primary" type="button" onClick={next}>{stepIndex === TOUR_STEPS.length - 1 ? 'Selesai' : 'Berikutnya'}<ArrowRight size={16} /></button></div></div></section></div>;
+  return (
+    <div className="tour-layer">
+      <div className="tour-overlay" aria-hidden="true" />
+      {targetRect && <div className="tour-spotlight" aria-hidden="true" style={{ top: targetRect.top - 8, left: targetRect.left - 8, width: targetRect.width + 16, height: targetRect.height + 16 }} />}
+      <section ref={cardRef} className="tour-card" role="dialog" aria-modal="true" aria-labelledby="tour-title" tabIndex="-1">
+        <div className="tour-card-topline">
+          <span className="section-kicker">Panduan TaskFlow</span>
+          <span>{stepIndex + 1} / {TOUR_STEPS.length}</span>
+        </div>
+        <h2 id="tour-title">{step.title}</h2>
+        <p>{step.description}</p>
+        <div className="tour-progress" aria-hidden="true"><span style={{ width: `${((stepIndex + 1) / TOUR_STEPS.length) * 100}%` }} /></div>
+        <div className="tour-actions">
+          <button className="btn btn-ghost" type="button" onClick={onSkip}>Lewati tutorial</button>
+          <div>
+            <button className="btn btn-secondary" type="button" onClick={() => setStepIndex((current) => Math.max(0, current - 1))} disabled={stepIndex === 0}>Kembali</button>
+            <button className="btn btn-primary" type="button" onClick={next}>{stepIndex === TOUR_STEPS.length - 1 ? 'Selesai' : 'Berikutnya'}<ArrowRight size={16} /></button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
 }
