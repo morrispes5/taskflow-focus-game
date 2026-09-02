@@ -97,8 +97,10 @@ Level hanya berfungsi sebagai penanda perjalanan. Tidak ada fitur terkunci, huku
 
 - Hari produktif adalah hari lokal ketika pengguna menyelesaikan tugas atau menyelesaikan sesi fokus.
 - Aktivitas pada hari berikutnya menaikkan streak.
-- Jeda lebih dari satu hari mengatur streak aktif kembali ke `1`.
+- Jeda lebih dari satu hari mengatur streak aktif kembali ke `1`, kecuali kuota streak freeze bulan itu masih menutupinya.
 - Streak ditampilkan sebagai konteks, bukan ukuran nilai diri pengguna.
+- Angka yang ditampilkan selalu berasal dari `getDisplayStreak`, bukan dari field tersimpan. Streak tersimpan hanya berubah saat ada aktivitas, jadi membacanya langsung akan menampilkan angka lama yang sudah tidak benar kepada pengguna yang lama tidak membuka aplikasi.
+- Ketika streak putus, tampilkan keadaan itu apa adanya beserta `bestStreak`, bukan angka `0` telanjang. Kejujuran tidak perlu terasa seperti hukuman.
 
 ## 5. Arsitektur Informasi
 
@@ -456,3 +458,33 @@ Tambahan yang tidak mengubah kepribadian produk:
 - Tema `light` | `dark` | `system` memakai token yang sama di `base.css`.
 - Folder materi hanya berupa URL yang dibuka atas aksi pengguna; tidak ada backend, OAuth, pembacaan, atau sinkronisasi Drive.
 - Tidak ada wipe data saat migrasi ke schema 6.
+
+## 15. Baseline v3 — ruang kerja yang tidak menghakimi
+
+Tambahan yang tetap memakai kepribadian yang sama.
+
+### Menunda tanpa rasa bersalah
+
+Tugas yang lewat tanggalnya sebelumnya hanya menumpuk sebagai daftar merah. Menunda ke besok atau ke akhir pekan tersedia langsung dari menu tugas dan dari baris terlambat di agenda Beranda.
+
+Menunda hanya menggeser `dueDate`. Ia bukan penyelesaian, tidak memberi XP, dan tidak menyentuh riwayat. Pilihannya juga tidak muncul untuk tugas yang sudah selesai, supaya tidak ada jalan yang membingungkan.
+
+### Tutup minggu
+
+Satu bagian di Analitik yang membaca minggu berjalan: apa yang selesai, apa yang lewat tanggalnya, apa yang masih menunggu, dan berapa menit fokus terkumpul. Bukan skor, bukan peringkat.
+
+Tugas yang jatuh tempo hari ini belum dihitung meleset; hanya hari yang benar-benar sudah lewat yang dihitung. Membawa tugas ke minggu depan mempertahankan hari yang sama supaya ritme mingguan pengguna tidak berubah diam-diam, dan selalu lewat konfirmasi yang menyebut jumlahnya.
+
+Bagian ini terbuka sendiri di akhir pekan, saat memang paling relevan. Di hari lain ia hanya satu tautan tenang, agar Analitik tidak berubah menjadi dashboard ramai.
+
+### Tangkap cepat di mana saja
+
+Ide sering datang justru ketika sesi fokus sedang berjalan. `Ctrl+K` membuka dialog tugas dari halaman mana pun tanpa memaksa pengguna meninggalkan pekerjaannya.
+
+### Data pengguna diperlakukan sebagai milik orang lain
+
+Data hanya ada di peramban perangkat itu. Karena itu:
+
+- Snapshot otomatis diambil sebelum reset dan import, dan dapat dipulihkan dari Pengaturan maupun dari gerbang profil setelah reset.
+- Pengingat export muncul tenang di kartu backup setelah 14 hari, bukan sebagai banner global.
+- Menandai penyimpanan sebagai persisten selalu berupa aksi eksplisit pengguna, tidak pernah permintaan izin yang muncul tiba-tiba saat halaman dibuka.

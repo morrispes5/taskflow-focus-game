@@ -17,7 +17,7 @@ Metadata internal disimpan terpisah pada record key `workspace-meta` dengan bent
   progress: { totalXp, level, currentStreak, bestStreak, lastActiveDate, streakFreezeMonth, streakFreezesUsed, lastConsistencyRewardDate, rewardedTaskIds, milestones, notifiedKeys },
   sessions: Session[],
   activeFocus: object | null,
-  preferences: { motion, focusPreset, theme, sound, notify, customFocusMinutes, focusSoundscape, focusSoundVolume }
+  preferences: { motion, focusPreset, theme, sound, notify, customFocusMinutes, focusSoundscape, focusSoundVolume, lastBackupAt }
 }
 ```
 
@@ -130,6 +130,18 @@ Tracker ini manual. TaskFlow tidak mendeteksi atau membaca aplikasi/tab lain, da
 `getAnalytics(..., { semester, scope })` dengan `scope: 'semester' | 'all'`.
 
 Tugas masuk semester jika `dueDate` (atau `completedAt` / `createdAt` jika tidak ada deadline) berada di `startDate`–`endDate` (inklusif). Sesi fokus memakai `endedAt` atau `startedAt`. Batas boleh terbuka: hanya mulai, atau hanya selesai.
+
+Rantai fallback itu bergantung pada `dateKeyFromTimestamp()` yang mengembalikan `null` untuk nilai kosong. Sempat tidak demikian: `Number(null)` bernilai `0` dan lolos `Number.isFinite`, sehingga `completedAt: null` menghasilkan `'1970-01-01'`, rantai tidak pernah sampai ke `createdAt`, dan **setiap tugas aktif tanpa deadline hilang dari analitik bermode semester**. Jangan menyederhanakan penjagaan nilai kosong di helper itu.
+
+## Menunda dan carry-over mingguan
+
+`applySnooze(data, taskId, target, now)` dengan `target: 'tomorrow' | 'weekend'` hanya menulis `dueDate` dan `updatedAt`. `'weekend'` memakai Sabtu berikutnya secara ketat, jadi menunda pada hari Sabtu jatuh ke Sabtu minggu depan. Target yang tidak dikenal mengembalikan `data` apa adanya.
+
+`applyWeekCarryOver(data, taskIds, now)` menggeser `dueDate` tugas terpilih tepat tujuh hari sehingga harinya tetap sama. Tugas tanpa `dueDate` dilewati.
+
+Keduanya **tidak** menyentuh `completed`, `completedAt`, `progress`, `sessions`, atau `archived`. Menunda bukan penyelesaian dan tidak boleh memberi XP.
+
+`getWeekReview(tasks, sessions, reference)` membaca minggu berjalan (Senin–Minggu) dan mengembalikan `completed`, `slipped`, `upcoming`, `focusMinutes`, `sessionsCompleted`, serta `label`. `slipped` hanya berisi tugas aktif yang `dueDate`-nya **sudah lewat**, jadi tugas yang jatuh tempo hari ini belum dihitung meleset.
 
 ## Backup
 
