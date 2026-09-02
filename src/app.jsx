@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MotionConfig } from 'motion/react';
 import { loadAppData, saveAppData, resetAppData, WorkspaceConflictError } from './lib/storage.js';
 import { applyTaskToggle, resolveTheme } from './lib/domain.js';
@@ -6,17 +6,29 @@ import { getDueReminders, markRemindersNotified, sendNotification } from './lib/
 import { playFeedbackTone } from './lib/audio.js';
 import { AppShell } from './components/AppShell.jsx';
 import { WorkspaceLoading } from './components/ui.jsx';
-import { HomePage } from './pages/HomePage.jsx';
-import { TasksPage } from './pages/TasksPage.jsx';
-import { FocusPage } from './pages/FocusPage.jsx';
-import { CalendarPage } from './pages/CalendarPage.jsx';
-import { AnalyticsPage } from './pages/AnalyticsPage.jsx';
-import { SettingsPage } from './pages/SettingsPage.jsx';
 
 function getCurrentPage() { return document.body.dataset.page || 'home'; }
 
+// TaskFlow adalah multi-page: satu dokumen hanya pernah merender satu halaman.
+// Mengimpor keenam halaman secara statis membuat setiap HTML mengunduh kode
+// halaman yang tidak akan pernah dipakainya.
+const PAGE_MODULES = {
+  home: () => import('./pages/HomePage.jsx').then((module) => ({ default: module.HomePage })),
+  tasks: () => import('./pages/TasksPage.jsx').then((module) => ({ default: module.TasksPage })),
+  calendar: () => import('./pages/CalendarPage.jsx').then((module) => ({ default: module.CalendarPage })),
+  focus: () => import('./pages/FocusPage.jsx').then((module) => ({ default: module.FocusPage })),
+  analytics: () => import('./pages/AnalyticsPage.jsx').then((module) => ({ default: module.AnalyticsPage })),
+  settings: () => import('./pages/SettingsPage.jsx').then((module) => ({ default: module.SettingsPage }))
+};
+
+// Unduhan dimulai saat modul dievaluasi, bukan saat render, supaya berjalan
+// paralel dengan hidrasi IndexedDB dan tidak menambah waktu tunggu.
+const ACTIVE_PAGE = getCurrentPage();
+const activePageModule = (PAGE_MODULES[ACTIVE_PAGE] || PAGE_MODULES.home)();
+const ActivePage = lazy(() => activePageModule);
+
 export default function TaskFlowApp() {
-  const page = getCurrentPage();
+  const page = ACTIVE_PAGE;
   const [data, setData] = useState(null);
   const [notice, setNotice] = useState(null);
   const [storageError, setStorageError] = useState(null);
@@ -190,12 +202,10 @@ export default function TaskFlowApp() {
   return (
     <MotionConfig reducedMotion={data.preferences.motion === 'compact' ? 'always' : 'user'}>
       <AppShell page={page} profile={data.profile} progress={data.progress} onboarding={data.onboarding} notice={notice} tourOpen={tourOpen} reminders={reminders} onCompleteProfile={completeProfile} onCloseTutorial={closeTutorial} onOpenReminders={() => { window.location.href = 'calendar.html'; }}>
-        {page === 'home' && <HomePage data={data} commit={commit} toggleTask={toggleTask} />}
-        {page === 'tasks' && <TasksPage data={data} commit={commit} toggleTask={toggleTask} />}
-        {page === 'calendar' && <CalendarPage data={data} />}
-        {page === 'focus' && <FocusPage data={data} commit={commit} toggleTask={toggleTask} />}
-        {page === 'analytics' && <AnalyticsPage data={data} />}
-        {page === 'settings' && <SettingsPage data={data} commit={commit} updatePreferences={updatePreferences} onStartTutorial={() => setTourOpen(true)} onResetWorkspace={resetWorkspace} />}
+        {/* Setiap halaman hanya memakai prop yang relevan baginya; sisanya diabaikan. */}
+        <Suspense fallback={null}>
+          <ActivePage data={data} commit={commit} toggleTask={toggleTask} updatePreferences={updatePreferences} onStartTutorial={() => setTourOpen(true)} onResetWorkspace={resetWorkspace} />
+        </Suspense>
       </AppShell>
     </MotionConfig>
   );

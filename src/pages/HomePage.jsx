@@ -64,14 +64,14 @@ export function HomePage({ data, commit, toggleTask }) {
         <p className="preview-label">{isReviewTarget ? 'Tugas terakhir yang bisa kamu tinjau' : 'Misi yang sedang kamu pilih'}</p>
         <h2>{focusTarget.text}</h2>
         <div className="preview-meta"><span>{isReviewTarget ? 'Review opsional' : getDueInfo(focusTarget).label}</span>{focusTarget.category && <span>{focusTarget.category}</span>}</div>
-        <div className="preview-focus-row"><div className="preview-timer"><strong>{getTaskFocusMinutes(focusTarget, data.preferences.focusPreset)}:00</strong><span>{isReviewTarget ? 'timer review opsional' : 'durasi awal'}</span></div><Illustration type="focus-run" alt={isReviewTarget ? 'Ilustrasi review tugas' : 'Ilustrasi Focus Run'} className="preview-illustration" /></div>
+        <div className="preview-focus-row"><div className="preview-timer"><strong>{getTaskFocusMinutes(focusTarget, data.preferences.focusPreset)}:00</strong><span>{isReviewTarget ? 'timer review opsional' : 'durasi awal'}</span></div><Illustration type="focus-run" alt={isReviewTarget ? 'Ilustrasi review tugas' : 'Ilustrasi Focus Run'} className="preview-illustration" loading="eager" /></div>
         <div className="preview-footer"><span><Zap size={14} />{isReviewTarget ? 'Tinjau tanpa mengubah XP' : `+${getTaskXp(focusTarget)} XP saat selesai`}</span><span className="preview-arrow"><ArrowRight size={16} /></span></div>
       </motion.a> : <motion.button className="home-hero-preview home-hero-preview-button" data-hero-item type="button" onClick={() => setDialogTask({})} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
         <div className="preview-topline"><span className="eyebrow">Focus Run</span><span className="quiet-status"><span className="status-dot" />Siap diisi</span></div>
         <p className="preview-label">Misi yang sedang kamu pilih</p>
         <h2>Ruang fokusmu siap diisi.</h2>
         <div className="preview-meta"><span>Tambahkan tugas</span></div>
-        <div className="preview-focus-row"><div className="preview-timer"><strong>{data.preferences.focusPreset}:00</strong><span>durasi awal</span></div><Illustration type="focus-run" alt="Ilustrasi Focus Run" className="preview-illustration" /></div>
+        <div className="preview-focus-row"><div className="preview-timer"><strong>{data.preferences.focusPreset}:00</strong><span>durasi awal</span></div><Illustration type="focus-run" alt="Ilustrasi Focus Run" className="preview-illustration" loading="eager" /></div>
         <div className="preview-footer"><span><Zap size={14} />Buat misi pertama</span><span className="preview-arrow"><ArrowRight size={16} /></span></div>
       </motion.button>}
     </motion.section>

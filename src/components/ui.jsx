@@ -4,10 +4,12 @@ import { Check, Sparkles, X } from 'lucide-react';
 
 export function PageActions({ children }) { return <div className="page-actions">{children}</div>; }
 
-export function Illustration({ type, alt, className = '' }) {
+// Ilustrasi disajikan sebagai WebP. Peramban yang tidak mendukungnya jatuh ke
+// illustration-fallback lewat onError yang sudah ada.
+export function Illustration({ type, alt, className = '', loading = 'lazy' }) {
   const [failed, setFailed] = useState(false);
   if (failed) return <div className={`illustration-fallback illustration-${type} ${className}`} aria-hidden="true"><Sparkles size={28} /></div>;
-  return <img className={`illustration illustration-${type} ${className}`} src={`${import.meta.env.BASE_URL}assets/illustrations/${type}.png`} alt={alt} onError={() => setFailed(true)} />;
+  return <img className={`illustration illustration-${type} ${className}`} src={`${import.meta.env.BASE_URL}assets/illustrations/${type}.webp`} alt={alt} loading={loading} decoding="async" onError={() => setFailed(true)} />;
 }
 
 export function StatCard({ label, value, hint, icon: Icon, accent = '' }) {
