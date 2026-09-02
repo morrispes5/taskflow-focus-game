@@ -533,9 +533,15 @@ export function isDateInSemester(dateKey, semester) {
   return true;
 }
 
+// Number(null) bernilai 0 dan lolos Number.isFinite, sehingga completedAt yang
+// null sebelumnya menghasilkan '1970-01-01'. Akibatnya taskInSemester tidak
+// pernah jatuh ke createdAt, dan setiap tugas tanpa deadline yang belum selesai
+// dianggap di luar rentang semester lalu hilang dari Analitik.
 export function dateKeyFromTimestamp(value) {
-  if (!Number.isFinite(Number(value))) return null;
-  return todayString(new Date(Number(value)));
+  if (value === null || value === undefined || value === '') return null;
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+  return todayString(new Date(timestamp));
 }
 
 export function taskInSemester(task, semester) {
