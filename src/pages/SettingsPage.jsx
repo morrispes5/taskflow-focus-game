@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, CircleHelp, Download, History, ShieldCheck, Sparkles, Trash2, Upload, Zap } from 'lucide-react';
 import { createBackup, parseBackupPayload, validateBackupFile, captureWorkspaceSnapshot, loadWorkspaceSnapshot, DEFAULT_PROFILE, FOCUS_SOUNDSCAPES, FOCUS_SOUNDSCAPE_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES } from '../lib/storage.js';
-import { makeCourse, validateProfileInput, validateSemesterInput, formatSnapshotLabel, getBackupReminder, getRoleTerminology, getDisplayStreak, makeTask } from '../lib/domain.js';
+import { makeCourse, validateProfileInput, validateSemesterInput, formatSnapshotLabel, getBackupReminder, getMeetingLabel, getRoleTerminology, getDisplayStreak, makeTask } from '../lib/domain.js';
 import { requestNotifyPermission } from '../lib/reminders.js';
 import { ConfirmDialog } from '../components/ui.jsx';
 import { CourseManager } from '../components/CourseForm.jsx';
@@ -70,8 +70,7 @@ export function SettingsPage({ data, commit, updatePreferences, onStartTutorial,
     courses: current.courses.map((item) => item.id === courseId ? { ...item, meetings } : item)
   }), `Daftar ${terms.meetingLabel.toLowerCase()} disimpan.`);
   const createTaskForMeeting = (course, meeting) => {
-    const isAcademic = data.profile.role === 'mahasiswa' || data.profile.role === 'pelajar';
-    const meetingTag = isAcademic && meeting.number === 8 ? 'UTS' : isAcademic && meeting.number === 16 ? 'UAS' : `${terms.meetingLabel} ${meeting.number}`;
+    const meetingTag = getMeetingLabel(meeting.number, terms);
     const newTask = makeTask({
       text: `${meeting.title || meetingTag}`,
       courseId: course.id,

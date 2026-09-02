@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays } from 'date-fns';
 import {
-  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, finishFocusRun, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDashboardStats, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, getBackupReminder, getDisplayStreak, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
+  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, finishFocusRun, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDashboardStats, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, applyTaskSave, formatDayDate, getBackupReminder, getDisplayStreak, getMeetingBadge, getMeetingLabel, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
   getProfileRecommendations, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
   getSemesterWeek, replaceActiveFocus, resumeDistraction, selectDailyMission, selectReviewTask, sortTasks, spawnNextOccurrence, todayString, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput,
   validateMeetingInput, generateDefaultMeetings, getSemesterSksSummary, getCourseMeetingsProgress, getRoleTerminology
@@ -433,5 +433,62 @@ describe('getBackupReminder', () => {
 
   it('memperlakukan sesi fokus sebagai data yang layak di-backup', () => {
     expect(getBackupReminder({ tasks: [], sessions: [{ id: 1 }], preferences: { lastBackupAt: null } }, at)).not.toBeNull();
+  });
+});
+
+describe('label pertemuan', () => {
+  const academic = getRoleTerminology('mahasiswa');
+  const professional = getRoleTerminology('profesional');
+
+  it('memberi UTS dan UAS hanya untuk peran akademik', () => {
+    expect(getMeetingBadge(8, academic)).toBe('UTS');
+    expect(getMeetingBadge(16, academic)).toBe('UAS');
+    expect(getMeetingBadge(8, professional)).toBe('P8');
+    expect(getMeetingBadge(16, professional)).toBe('P16');
+  });
+
+  it('memakai penomoran biasa untuk pertemuan lain', () => {
+    expect(getMeetingBadge(3, academic)).toBe('P3');
+    expect(getMeetingBadge(null, academic)).toBe('');
+  });
+
+  it('mengikuti istilah peran pada label panjang', () => {
+    expect(getMeetingLabel(3, academic)).toBe('Pertemuan 3');
+    expect(getMeetingLabel(3, professional)).toBe('Milestone 3');
+    expect(getMeetingLabel(8, academic)).toBe('UTS');
+    expect(getMeetingLabel(8, professional)).toBe('Milestone 8');
+  });
+});
+
+describe('applyTaskSave', () => {
+  const base = () => ({ tasks: [makeTask({ text: 'Tugas lama', priority: 'low' }, 1)] });
+
+  it('menambahkan tugas baru di paling atas ketika tanpa id', () => {
+    const next = applyTaskSave(base(), { text: 'Tugas baru' });
+    expect(next.tasks).toHaveLength(2);
+    expect(next.tasks[0].text).toBe('Tugas baru');
+  });
+
+  it('memperbarui tugas yang cocok dan merapikan field opsional', () => {
+    const next = applyTaskSave(base(), { text: '  Judul dirapikan  ', category: '  Kuliah  ', dueDate: '', dueTime: '', estimateMinutes: '50', courseId: '', meetingNumber: '' }, 1, 999);
+    expect(next.tasks[0]).toMatchObject({ text: 'Judul dirapikan', category: 'Kuliah', dueDate: null, dueTime: null, estimateMinutes: 50, courseId: null, meetingNumber: null, updatedAt: 999 });
+  });
+
+  it('tidak menyentuh tugas lain', () => {
+    const data = { tasks: [makeTask({ text: 'Satu' }, 1), makeTask({ text: 'Dua' }, 2)] };
+    const next = applyTaskSave(data, { text: 'Satu diubah' }, 1, 500);
+    expect(next.tasks[1]).toBe(data.tasks[1]);
+  });
+
+  it('mengabaikan id yang tidak ada tanpa mengubah apa pun', () => {
+    const data = base();
+    expect(applyTaskSave(data, { text: 'Tidak terpakai' }, 99).tasks[0].text).toBe('Tugas lama');
+  });
+});
+
+describe('formatDayDate', () => {
+  it('memakai nama hari dan bulan Indonesia', () => {
+    expect(formatDayDate(new Date(2026, 8, 2))).toBe('Rabu, 2 Sep');
+    expect(formatDayDate(new Date(2026, 0, 1))).toBe('Kamis, 1 Jan');
   });
 });

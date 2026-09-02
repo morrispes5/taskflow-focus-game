@@ -2,7 +2,7 @@ import { addDays, differenceInCalendarDays, endOfDay, format, isWithinInterval, 
 import {
   normalizeTask, normalizeMeeting, PRIORITY_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES, MAX_PROFILE_GOAL_LENGTH, MAX_PROFILE_NAME_LENGTH,
   MAX_COURSE_NAME, MAX_COURSES, MAX_NOTES_LENGTH, MAX_SUBTASKS, MAX_TASK_LENGTH, MAX_URL_LENGTH, MAX_MEETINGS, MAX_MEETING_TITLE, MAX_MEETING_NOTES,
-  STREAK_FREEZE_LIMIT, TASK_TYPES, TASK_TYPE_LABELS, COURSE_COLORS,
+  STREAK_FREEZE_LIMIT, TASK_TYPES, TASK_TYPE_LABELS, COURSE_COLORS, WEEKDAY_LABELS,
   isTimeString
 } from './storage.js';
 
@@ -12,11 +12,16 @@ export function todayString(date = new Date()) { return format(date, 'yyyy-MM-dd
 
 export function parseDateString(value) { return parseISO(`${value}T00:00:00`); }
 
+export const MONTH_LABELS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
 export function formatDate(value) {
   if (!value) return '';
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
   const date = parseDateString(value);
-  return `${date.getDate()} ${months[date.getMonth()]}`;
+  return `${date.getDate()} ${MONTH_LABELS_SHORT[date.getMonth()]}`;
+}
+
+export function formatDayDate(date) {
+  return `${WEEKDAY_LABELS[date.getDay()]}, ${date.getDate()} ${MONTH_LABELS_SHORT[date.getMonth()]}`;
 }
 
 export function formatTime(value) {
@@ -798,6 +803,56 @@ export function getRoleTerminology(role = 'mahasiswa') {
     driveHint: isAcademic ? 'Folder Google Drive / materi' : 'Folder Google Drive / dokumen proyek',
     sksLabel: isAcademic ? 'SKS' : 'Bobot',
     sksSummaryLabel: isAcademic ? 'Beban SKS Semester' : 'Total Bobot Proyek'
+  };
+}
+
+// UTS dan UAS hanya masuk akal untuk peran akademik. Sebelumnya aturan ini
+// diketik ulang di lima tempat dan tiga di antaranya lupa memeriksa peran,
+// sehingga pengguna Profesional pun melihat milestone-nya diberi label UTS.
+// Number(null) bernilai 0 dan lolos isFinite, jadi nilai kosong harus ditolak
+// lebih dulu supaya tugas tanpa nomor pertemuan tidak diberi label "P0".
+function toMeetingNumber(number) {
+  if (number === null || number === undefined || number === '') return null;
+  const parsed = Number(number);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function examLabel(number, terms) {
+  if (!terms?.isAcademic) return null;
+  if (number === 8) return 'UTS';
+  if (number === 16) return 'UAS';
+  return null;
+}
+
+export function getMeetingBadge(number, terms) {
+  const parsed = toMeetingNumber(number);
+  if (parsed === null) return '';
+  return examLabel(parsed, terms) || `P${parsed}`;
+}
+
+export function getMeetingLabel(number, terms) {
+  const parsed = toMeetingNumber(number);
+  if (parsed === null) return '';
+  return examLabel(parsed, terms) || `${terms?.meetingLabel || 'Pertemuan'} ${parsed}`;
+}
+
+// Satu tempat menulis perubahan tugas, dipakai Beranda maupun Quest Board.
+export function applyTaskSave(data, input, id = null, now = Date.now()) {
+  if (!id) return { ...data, tasks: [makeTask(input), ...data.tasks] };
+  return {
+    ...data,
+    tasks: data.tasks.map((task) => task.id !== id ? task : {
+      ...task,
+      ...input,
+      text: String(input.text ?? task.text).trim(),
+      category: input.category?.trim() || null,
+      dueDate: input.dueDate || null,
+      dueTime: input.dueTime || null,
+      estimateMinutes: Number(input.estimateMinutes) || 25,
+      courseId: input.courseId || null,
+      meetingNumber: input.meetingNumber ? Number(input.meetingNumber) : null,
+      updatedAt: now
+    })
   };
 }
 
