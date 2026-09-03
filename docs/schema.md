@@ -17,7 +17,7 @@ Metadata internal disimpan terpisah pada record key `workspace-meta` dengan bent
   progress: { totalXp, level, currentStreak, bestStreak, lastActiveDate, streakFreezeMonth, streakFreezesUsed, lastConsistencyRewardDate, rewardedTaskIds, milestones, notifiedKeys },
   sessions: Session[],
   activeFocus: object | null,
-  preferences: { motion, focusPreset, theme, sound, notify, customFocusMinutes, focusSoundscape, focusSoundVolume }
+  preferences: { motion, focusPreset, theme, sound, notify, customFocusMinutes, focusSoundscape, focusSoundVolume, lastBackupAt }
 }
 ```
 
@@ -77,6 +77,16 @@ Meeting = {
 - `meetings` berisi daftar pertemuan (standar 16 pertemuan kuliah dengan UTS di P8 & UAS di P16, atau 4 milestone proyek untuk pengguna profesional).
 - Antarmuka beradaptasi sesuai `profile.role` (*Progressive Disclosure*): mahasiswa/pelajar mendapatkan istilah akademik (*Mata Kuliah*, *SKS*, *Pertemuan*), sedangkan profesional/lainnya mendapatkan istilah proyek (*Proyek*, *Bobot*, *Milestone*).
 
+## Snapshot pemulihan
+
+Key ketiga pada store yang sama: `app-data-snapshot`, berisi `{ data, savedAt, reason }`.
+
+Snapshot **tidak** ikut pada jalur tulis biasa. Ia hanya diambil tepat sebelum operasi yang memang menghancurkan data, yaitu reset (`reason: 'reset'`) dan import (`reason: 'import'`), serta saat memulihkan dari Pengaturan (`reason: 'pemulihan'`). Penulisannya memakai transaksi sendiri dan kegagalannya ditelan, sehingga kode snapshot tidak pernah bisa membatalkan penyimpanan pengguna. `app-data` dan `workspace-meta` tidak tersentuh, jadi revision tidak berubah.
+
+Snapshot tidak ikut ke backup JSON dan tidak dihitung sebagai bagian dari `schemaVersion`.
+
+Pemulihan dari gerbang profil (setelah reset) sengaja **tidak** mengambil snapshot lebih dulu: workspace saat itu kosong, dan menyimpannya akan menimpa satu-satunya titik pulih yang ada.
+
 ## Preferensi v6
 
 | Field | Nilai | Default migrasi |
@@ -121,7 +131,21 @@ Tracker ini manual. TaskFlow tidak mendeteksi atau membaca aplikasi/tab lain, da
 
 Tugas masuk semester jika `dueDate` (atau `completedAt` / `createdAt` jika tidak ada deadline) berada di `startDate`–`endDate` (inklusif). Sesi fokus memakai `endedAt` atau `startedAt`. Batas boleh terbuka: hanya mulai, atau hanya selesai.
 
+Rantai fallback itu bergantung pada `dateKeyFromTimestamp()` yang mengembalikan `null` untuk nilai kosong. Sempat tidak demikian: `Number(null)` bernilai `0` dan lolos `Number.isFinite`, sehingga `completedAt: null` menghasilkan `'1970-01-01'`, rantai tidak pernah sampai ke `createdAt`, dan **setiap tugas aktif tanpa deadline hilang dari analitik bermode semester**. Jangan menyederhanakan penjagaan nilai kosong di helper itu.
+
+## Menunda dan carry-over mingguan
+
+`applySnooze(data, taskId, target, now)` dengan `target: 'tomorrow' | 'weekend'` hanya menulis `dueDate` dan `updatedAt`. `'weekend'` memakai Sabtu berikutnya secara ketat, jadi menunda pada hari Sabtu jatuh ke Sabtu minggu depan. Target yang tidak dikenal mengembalikan `data` apa adanya.
+
+`applyWeekCarryOver(data, taskIds, now)` menggeser `dueDate` tugas terpilih tepat tujuh hari sehingga harinya tetap sama. Tugas tanpa `dueDate` dilewati.
+
+Keduanya **tidak** menyentuh `completed`, `completedAt`, `progress`, `sessions`, atau `archived`. Menunda bukan penyelesaian dan tidak boleh memberi XP.
+
+`getWeekReview(tasks, sessions, reference)` membaca minggu berjalan (Senin–Minggu) dan mengembalikan `completed`, `slipped`, `upcoming`, `focusMinutes`, `sessionsCompleted`, serta `label`. `slipped` hanya berisi tugas aktif yang `dueDate`-nya **sudah lewat**, jadi tugas yang jatuh tempo hari ini belum dihitung meleset.
+
 ## Backup
+
+Preferensi juga memuat `lastBackupAt` (epoch milidetik atau `null`), field additive di dalam v8 yang dicatat saat pengguna menekan Export JSON. Workspace lama tanpa nilai ini tetap sah dan mendapat `null`. `SCHEMA_VERSION` dan `BACKUP_VERSION` tetap 8.
 
 `createBackup()` menulis `version: 8` plus `courses` (termasuk `meetings`), `semester`, preferensi soundscape, dan histori distraksi sesi.
 `parseBackupPayload()` menerima array tugas mentah (legacy), backup v4, v5, v6, v7, dan v8.

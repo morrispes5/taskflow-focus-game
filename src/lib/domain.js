@@ -1,8 +1,8 @@
-import { addDays, differenceInCalendarDays, endOfDay, format, isWithinInterval, parseISO, startOfMonth, startOfWeek } from 'date-fns';
+import { addDays, differenceInCalendarDays, endOfDay, format, isWithinInterval, nextSaturday, parseISO, startOfMonth, startOfWeek } from 'date-fns';
 import {
   normalizeTask, normalizeMeeting, PRIORITY_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES, MAX_PROFILE_GOAL_LENGTH, MAX_PROFILE_NAME_LENGTH,
   MAX_COURSE_NAME, MAX_COURSES, MAX_NOTES_LENGTH, MAX_SUBTASKS, MAX_TASK_LENGTH, MAX_URL_LENGTH, MAX_MEETINGS, MAX_MEETING_TITLE, MAX_MEETING_NOTES,
-  STREAK_FREEZE_LIMIT, TASK_TYPES, TASK_TYPE_LABELS, COURSE_COLORS,
+  STREAK_FREEZE_LIMIT, TASK_TYPES, TASK_TYPE_LABELS, COURSE_COLORS, WEEKDAY_LABELS,
   isTimeString
 } from './storage.js';
 
@@ -12,18 +12,30 @@ export function todayString(date = new Date()) { return format(date, 'yyyy-MM-dd
 
 export function parseDateString(value) { return parseISO(`${value}T00:00:00`); }
 
+export const MONTH_LABELS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
 export function formatDate(value) {
   if (!value) return '';
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
   const date = parseDateString(value);
-  return `${date.getDate()} ${months[date.getMonth()]}`;
+  return `${date.getDate()} ${MONTH_LABELS_SHORT[date.getMonth()]}`;
+}
+
+export function formatDayDate(date) {
+  return `${WEEKDAY_LABELS[date.getDay()]}, ${date.getDate()} ${MONTH_LABELS_SHORT[date.getMonth()]}`;
+}
+
+export function formatTimer(seconds) {
+  const numeric = Number(seconds);
+  const safe = Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : 0;
+  return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
 }
 
 export function formatTime(value) {
   return value && /^\d{2}:\d{2}$/.test(value) ? value : '';
 }
 
-export function dueTimestamp(task, reference = new Date()) {
+// TODO(fase-4): parameter reference tidak dipakai; isOverdue mengira nilai ini berpengaruh.
+export function dueTimestamp(task, _reference = new Date()) {
   if (!task.dueDate) return null;
   const time = formatTime(task.dueTime) || '23:59';
   return parseISO(`${task.dueDate}T${time}:00`).getTime() || parseDateString(task.dueDate).getTime();
@@ -403,6 +415,7 @@ export function getDashboardStats(tasks, progress, sessions, reference = new Dat
   const active = live.filter((task) => !task.completed);
   const completed = live.filter((task) => task.completed);
   const today = todayString(reference);
+  const displayStreak = getDisplayStreak(progress, today);
   return {
     total: live.length,
     active: active.length,
@@ -412,11 +425,13 @@ export function getDashboardStats(tasks, progress, sessions, reference = new Dat
     focusMinutes: Math.floor(sessions.filter(isCompletedFocusSession).reduce((sum, session) => sum + session.activeSeconds, 0) / 60),
     xp: progress.totalXp,
     level: progress.level,
-    streak: progress.currentStreak
+    streak: displayStreak.value,
+    streakBroken: displayStreak.broken,
+    bestStreak: displayStreak.bestStreak
   };
 }
 
-export function getUpcomingDeadlines(tasks, reference = new Date(), limit = 3) {
+export function getUpcomingDeadlines(tasks, _reference = new Date(), limit = 3) {
   return sortTasks(
     visibleTasks(tasks).filter((task) => !task.completed && task.dueDate),
     'dueSoon'
@@ -518,9 +533,15 @@ export function isDateInSemester(dateKey, semester) {
   return true;
 }
 
+// Number(null) bernilai 0 dan lolos Number.isFinite, sehingga completedAt yang
+// null sebelumnya menghasilkan '1970-01-01'. Akibatnya taskInSemester tidak
+// pernah jatuh ke createdAt, dan setiap tugas tanpa deadline yang belum selesai
+// dianggap di luar rentang semester lalu hilang dari Analitik.
 export function dateKeyFromTimestamp(value) {
-  if (!Number.isFinite(Number(value))) return null;
-  return todayString(new Date(Number(value)));
+  if (value === null || value === undefined || value === '') return null;
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+  return todayString(new Date(timestamp));
 }
 
 export function taskInSemester(task, semester) {
@@ -581,6 +602,70 @@ export function getAnalytics(tasks, sessions, courses = [], reference = new Date
     types,
     priority,
     days
+  };
+}
+
+export const SNOOZE_TARGETS = ['tomorrow', 'weekend'];
+export const SNOOZE_LABELS = { tomorrow: 'Tunda ke besok', weekend: 'Tunda ke akhir pekan' };
+
+// Tugas yang terlambat hanya menumpuk dan membuat daftar terasa menghakimi.
+// Menunda cukup menggeser dueDate; status, XP, dan riwayat tidak disentuh.
+export function getSnoozeDate(target, reference = new Date()) {
+  if (target === 'weekend') return todayString(nextSaturday(reference));
+  return todayString(addDays(reference, 1));
+}
+
+export function applySnooze(data, taskId, target, now = Date.now()) {
+  if (!SNOOZE_TARGETS.includes(target)) return data;
+  const dueDate = getSnoozeDate(target, new Date(now));
+  return {
+    ...data,
+    tasks: data.tasks.map((task) => task.id !== taskId ? task : { ...task, dueDate, updatedAt: now })
+  };
+}
+
+// Tutup minggu: membaca ritme satu minggu, bukan menilai. Yang meleset adalah
+// tugas aktif yang tanggalnya sudah lewat di dalam minggu berjalan, jadi tugas
+// yang jatuh tempo hari ini belum dihitung meleset.
+export function getWeekReview(tasks, sessions = [], reference = new Date()) {
+  const start = getWeekStart(reference);
+  const end = endOfDay(addDays(start, 6));
+  const startKey = todayString(start);
+  const endKey = todayString(addDays(start, 6));
+  const todayKey = todayString(reference);
+  const live = visibleTasks(tasks);
+  const inWeek = (dateKey) => Boolean(dateKey) && dateKey >= startKey && dateKey <= endKey;
+
+  const completed = live.filter((task) => task.completedAt && isWithinInterval(new Date(task.completedAt), { start, end }));
+  const slipped = live.filter((task) => !task.completed && inWeek(task.dueDate) && task.dueDate < todayKey);
+  const upcoming = live.filter((task) => !task.completed && inWeek(task.dueDate) && task.dueDate >= todayKey);
+  const weekSessions = (Array.isArray(sessions) ? sessions : []).filter((session) => {
+    const dateKey = dateKeyFromTimestamp(session.endedAt || session.startedAt);
+    return isCompletedFocusSession(session) && inWeek(dateKey);
+  });
+
+  return {
+    startKey,
+    endKey,
+    label: `${formatDate(startKey)} – ${formatDate(endKey)}`,
+    completed,
+    slipped,
+    upcoming,
+    focusMinutes: Math.floor(weekSessions.reduce((sum, session) => sum + session.activeSeconds, 0) / 60),
+    sessionsCompleted: weekSessions.length
+  };
+}
+
+// Membawa tugas yang meleset ke minggu depan mempertahankan hari yang sama,
+// supaya ritme mingguan pengguna tidak berubah diam-diam.
+export function applyWeekCarryOver(data, taskIds, now = Date.now()) {
+  const ids = new Set(taskIds);
+  if (!ids.size) return data;
+  return {
+    ...data,
+    tasks: data.tasks.map((task) => (!ids.has(task.id) || !task.dueDate)
+      ? task
+      : { ...task, dueDate: todayString(addDays(parseDateString(task.dueDate), 7)), updatedAt: now })
   };
 }
 
@@ -727,7 +812,7 @@ export function validateMeetingInput(input, existing = []) {
   return null;
 }
 
-export function generateDefaultMeetings(courseName = '', role = 'mahasiswa') {
+export function generateDefaultMeetings(_courseName = '', role = 'mahasiswa') {
   const isProfessional = role === 'profesional' || role === 'lainnya';
   if (isProfessional) {
     return [
@@ -794,6 +879,56 @@ export function getRoleTerminology(role = 'mahasiswa') {
     driveHint: isAcademic ? 'Folder Google Drive / materi' : 'Folder Google Drive / dokumen proyek',
     sksLabel: isAcademic ? 'SKS' : 'Bobot',
     sksSummaryLabel: isAcademic ? 'Beban SKS Semester' : 'Total Bobot Proyek'
+  };
+}
+
+// UTS dan UAS hanya masuk akal untuk peran akademik. Sebelumnya aturan ini
+// diketik ulang di lima tempat dan tiga di antaranya lupa memeriksa peran,
+// sehingga pengguna Profesional pun melihat milestone-nya diberi label UTS.
+// Number(null) bernilai 0 dan lolos isFinite, jadi nilai kosong harus ditolak
+// lebih dulu supaya tugas tanpa nomor pertemuan tidak diberi label "P0".
+function toMeetingNumber(number) {
+  if (number === null || number === undefined || number === '') return null;
+  const parsed = Number(number);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function examLabel(number, terms) {
+  if (!terms?.isAcademic) return null;
+  if (number === 8) return 'UTS';
+  if (number === 16) return 'UAS';
+  return null;
+}
+
+export function getMeetingBadge(number, terms) {
+  const parsed = toMeetingNumber(number);
+  if (parsed === null) return '';
+  return examLabel(parsed, terms) || `P${parsed}`;
+}
+
+export function getMeetingLabel(number, terms) {
+  const parsed = toMeetingNumber(number);
+  if (parsed === null) return '';
+  return examLabel(parsed, terms) || `${terms?.meetingLabel || 'Pertemuan'} ${parsed}`;
+}
+
+// Satu tempat menulis perubahan tugas, dipakai Beranda maupun Quest Board.
+export function applyTaskSave(data, input, id = null, now = Date.now()) {
+  if (!id) return { ...data, tasks: [makeTask(input), ...data.tasks] };
+  return {
+    ...data,
+    tasks: data.tasks.map((task) => task.id !== id ? task : {
+      ...task,
+      ...input,
+      text: String(input.text ?? task.text).trim(),
+      category: input.category?.trim() || null,
+      dueDate: input.dueDate || null,
+      dueTime: input.dueTime || null,
+      estimateMinutes: Number(input.estimateMinutes) || 25,
+      courseId: input.courseId || null,
+      meetingNumber: input.meetingNumber ? Number(input.meetingNumber) : null,
+      updatedAt: now
+    })
   };
 }
 
@@ -903,6 +1038,21 @@ export function getStreakFreezeInfo(progress, dateKey) {
   return missedDays <= remaining ? { used: missedDays, remainingAfter: remaining - missedDays } : null;
 }
 
+// Streak tersimpan hanya diperbarui saat ada aktivitas (updateStreak). Tanpa
+// selector ini, pengguna yang lama tidak membuka TaskFlow tetap melihat angka
+// streak lama seolah masih berjalan. Ini murni tampilan: tidak ada yang ditulis
+// ke storage, dan aturan freeze-nya sengaja sama persis dengan updateStreak.
+export function getDisplayStreak(progress, dateKey = todayString()) {
+  const stored = Math.max(0, Number(progress?.currentStreak) || 0);
+  const bestStreak = Math.max(0, Number(progress?.bestStreak) || 0);
+  const intact = (value) => ({ value, broken: false, bestStreak });
+  if (!stored) return intact(0);
+  const gap = getStreakGap(progress, dateKey);
+  // Tanpa lastActiveDate tidak ada dasar untuk menyatakan streak putus.
+  if (gap === null || gap <= 1) return intact(stored);
+  return getStreakFreezeInfo(progress, dateKey) ? intact(stored) : { value: 0, broken: true, bestStreak };
+}
+
 export function updateStreak(progress, dateKey) {
   const next = { ...progress };
   const monthKey = getStreakMonth(dateKey);
@@ -917,6 +1067,26 @@ export function updateStreak(progress, dateKey) {
   next.bestStreak = Math.max(next.bestStreak, next.currentStreak);
   next.lastActiveDate = dateKey;
   return next;
+}
+
+export function formatSnapshotLabel(snapshot) {
+  const savedAt = Number(snapshot?.savedAt);
+  if (!Number.isFinite(savedAt) || savedAt <= 0) return 'tanpa tanggal';
+  return new Date(savedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+export const BACKUP_REMINDER_DAYS = 14;
+
+// Data TaskFlow hanya ada di peramban perangkat ini. Pengingat ini muncul
+// tenang di kartu backup, bukan sebagai banner global.
+export function getBackupReminder(data, now = Date.now()) {
+  const hasData = Boolean(data?.tasks?.length || data?.sessions?.length);
+  if (!hasData) return null;
+  const lastBackupAt = Number(data?.preferences?.lastBackupAt);
+  if (!Number.isFinite(lastBackupAt) || lastBackupAt <= 0) return { days: null, text: 'Kamu belum pernah membuat backup. Semua data ini hanya ada di peramban perangkat ini.' };
+  const days = Math.floor((now - lastBackupAt) / 86400000);
+  if (days < BACKUP_REMINDER_DAYS) return null;
+  return { days, text: `Backup terakhir ${days} hari lalu. Export lagi agar progresmu punya salinan di luar peramban.` };
 }
 
 export function resolveTheme(preference, systemDark) {

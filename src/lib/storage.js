@@ -16,6 +16,7 @@ const DATABASE_VERSION = 1;
 const STORE_NAME = 'workspace';
 const APP_RECORD_KEY = 'app-data';
 const META_RECORD_KEY = 'workspace-meta';
+const SNAPSHOT_RECORD_KEY = 'app-data-snapshot';
 
 export const SCHEMA_VERSION = 8;
 export const BACKUP_VERSION = 8;
@@ -57,7 +58,7 @@ export const FOCUS_SOUNDSCAPE_LABELS = { none: 'Hening', lofi: 'Lo-fi', rain: 'H
 
 export const DEFAULT_PROFILE = { name: '', role: '', goal: '', tagline: 'Ruang produktif harian' };
 export const DEFAULT_ONBOARDING = { profileCompleted: false, tutorialCompleted: false, tutorialSkipped: false, completedAt: null, coursesIntroDismissed: false };
-const DEFAULT_PREFERENCES = { motion: 'full', focusPreset: 25, theme: 'system', sound: true, notify: false, customFocusMinutes: 40, focusSoundscape: 'none', focusSoundVolume: 55 };
+const DEFAULT_PREFERENCES = { motion: 'full', focusPreset: 25, theme: 'system', sound: true, notify: false, customFocusMinutes: 40, focusSoundscape: 'none', focusSoundVolume: 55, lastBackupAt: null };
 
 function isDateString(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -307,7 +308,9 @@ export function normalizePreferences(raw) {
     notify: typeof source.notify === 'boolean' ? source.notify : DEFAULT_PREFERENCES.notify,
     customFocusMinutes: Math.min(180, Math.max(5, custom)),
     focusSoundscape: FOCUS_SOUNDSCAPES.includes(source.focusSoundscape) ? source.focusSoundscape : DEFAULT_PREFERENCES.focusSoundscape,
-    focusSoundVolume: Math.min(100, Math.max(0, focusSoundVolume))
+    focusSoundVolume: Math.min(100, Math.max(0, focusSoundVolume)),
+    // Field additive di dalam v8: workspace lama tanpa nilai ini tetap sah.
+    lastBackupAt: Number.isFinite(Number(source.lastBackupAt)) && Number(source.lastBackupAt) > 0 ? Number(source.lastBackupAt) : null
   };
 }
 
@@ -485,7 +488,39 @@ export function createWorkspaceStore({ indexedDb = globalThis.indexedDB, storage
     }
   };
 
+  // Snapshot sengaja tidak ikut pada jalur tulis biasa. Ia hanya diambil sebelum
+  // operasi yang memang menghancurkan data (reset dan import), ditulis dalam
+  // transaksi sendiri, dan kegagalannya ditelan. Dengan begitu tidak ada cara
+  // bagi kode snapshot untuk membatalkan penyimpanan pengguna.
+  const readSnapshot = async () => {
+    const database = await openDatabase();
+    const transaction = database.transaction(STORE_NAME, 'readonly');
+    const complete = transactionResult(transaction);
+    const record = await requestResult(transaction.objectStore(STORE_NAME).get(SNAPSHOT_RECORD_KEY));
+    await complete;
+    if (!record || typeof record !== 'object' || !record.data) return null;
+    return { data: normalizeAppData(record.data), savedAt: numberOr(record.savedAt, 0), reason: String(record.reason ?? '') };
+  };
+
+  const captureSnapshot = async (reason) => {
+    try {
+      const current = await read();
+      if (!current.data) return null;
+      const database = await openDatabase();
+      const transaction = database.transaction(STORE_NAME, 'readwrite');
+      const complete = transactionResult(transaction);
+      const savedAt = Date.now();
+      transaction.objectStore(STORE_NAME).put({ data: current.data, savedAt, reason: String(reason ?? '') }, SNAPSHOT_RECORD_KEY);
+      await complete;
+      return { savedAt, reason: String(reason ?? '') };
+    } catch {
+      return null;
+    }
+  };
+
   return {
+    readSnapshot,
+    captureSnapshot,
     async load() {
       const stored = await read();
       // IndexedDB tetap authoritative. localStorage hanya dibaca jika record utama belum pernah dibuat.
@@ -508,6 +543,7 @@ export function createWorkspaceStore({ indexedDb = globalThis.indexedDB, storage
     },
     save(data, expectedRevision) { return write(data, expectedRevision); },
     async reset(expectedRevision) {
+      await captureSnapshot('reset');
       const reset = await write(createEmptyAppData(), expectedRevision);
       clearLegacyTaskFlowData(storage);
       return reset;
@@ -525,6 +561,8 @@ const defaultStore = typeof window === 'undefined' ? null : createWorkspaceStore
 export function loadAppData() { return defaultStore.load(); }
 export function saveAppData(data, expectedRevision) { return defaultStore.save(data, expectedRevision); }
 export function resetAppData(expectedRevision) { return defaultStore.reset(expectedRevision); }
+export function loadWorkspaceSnapshot() { return defaultStore.readSnapshot(); }
+export function captureWorkspaceSnapshot(reason) { return defaultStore.captureSnapshot(reason); }
 
 export function createBackup(data) {
   return {

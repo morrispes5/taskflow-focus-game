@@ -137,6 +137,22 @@ Halaman Analitik membantu kamu membaca pola kerja, bukan mengejar skor kosong. I
 - aktivitas tujuh hari terakhir;
 - ringkasan berdasarkan mata kuliah, jenis tugas, dan kategori.
 
+### 🗓️ Tutup minggu
+
+Di akhir pekan, Analitik menampilkan ringkasan satu minggu: apa yang selesai, apa yang lewat tanggalnya, apa yang masih menunggu, dan berapa menit fokus terkumpul. Di hari lain kamu tetap bisa membukanya lewat tautan **Tutup minggu ini**.
+
+Kalau ada tugas yang meleset, satu tombol membawanya ke minggu depan pada hari yang sama. Tidak ada yang dihapus dan tidak ada status yang berubah.
+
+### 😌 Tunda tanpa rasa bersalah
+
+Tugas yang lewat deadline tidak harus terus menumpuk sebagai daftar merah. Dari menu tugas, atau langsung dari baris terlambat di Beranda, kamu bisa memilih **Tunda ke besok** atau **Tunda ke akhir pekan**.
+
+Menunda hanya memindahkan deadline. Statusmu, catatanmu, dan XP-mu tidak berubah.
+
+### ⌨️ Tangkap ide di mana saja
+
+Tekan **Ctrl+K** dari halaman mana pun untuk membuka form tugas, termasuk ketika sesi fokus sedang berjalan. Ide yang muncul di tengah kerja tidak perlu hilang hanya karena kamu enggan pindah halaman.
+
 ### 🎮 Gamifikasi ringan, bukan tekanan
 
 TaskFlow memiliki XP, level, dan streak sebagai feedback kecil setelah kamu berprogres. Tidak ada leaderboard, hukuman, atau fitur yang dikunci karena level rendah.
@@ -178,6 +194,12 @@ TaskFlow dibuat dengan pendekatan **local-first**:
 - dapat digunakan sebagai aplikasi web/PWA;
 - tersedia fitur **Export JSON** dan **Import JSON** untuk backup atau memindahkan data secara manual.
 
+Ada tiga lapis perlindungan tambahan:
+
+- **Snapshot otomatis.** Sebelum mereset workspace atau memulihkan backup, TaskFlow menyimpan satu salinan keadaan sebelumnya. Kalau ternyata salah tekan, salinan itu bisa dipulihkan dari Pengaturan—atau langsung dari halaman pengisian profil kalau kamu sudah terlanjur mereset.
+- **Pengingat backup.** Kalau sudah lebih dari dua minggu tanpa export, kartu backup di Pengaturan mengingatkan dengan tenang.
+- **Lindungi data di perangkat ini.** Peramban boleh membersihkan penyimpanan situs saat ruang menipis. Tombol ini meminta peramban menandai data TaskFlow sebagai persisten.
+
 **Catatan penting:** karena data tersimpan di browser, data tidak otomatis tersinkronisasi antarperangkat. Export backup sebelum menghapus data browser, mengganti perangkat, atau memakai perangkat bersama. Pengingat browser juga hanya dapat berjalan ketika TaskFlow terbuka atau terpasang sebagai aplikasi dan izin notifikasi telah diberikan.
 
 ## 🧭 Prinsip TaskFlow
@@ -206,10 +228,13 @@ Perintah verifikasi:
 
 ```bash
 npm test
+npm run lint
 npm run build
 ```
 
-TaskFlow dibangun sebagai web responsive dengan React, Vite, dan penyimpanan IndexedDB di browser. Dokumentasi keputusan desain dan kontrak data tersedia di [design.md](design.md) dan [docs/schema.md](docs/schema.md).
+TaskFlow dibangun sebagai web responsive dengan React, Vite, dan penyimpanan IndexedDB di browser.
+
+Sebelum mengubah kode, baca [AGENTS.md](AGENTS.md): di sana ada aturan yang tidak boleh dilanggar, peta arsitektur, dan daftar jebakan yang pernah menyebabkan bug nyata. Keputusan desain ada di [design.md](design.md), kontrak data di [docs/schema.md](docs/schema.md), dan riwayat perubahan di [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
 </details>
 

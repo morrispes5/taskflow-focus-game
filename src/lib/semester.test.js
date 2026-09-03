@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  getAnalytics, hasSemesterRange, isDateInSemester, sessionInSemester, taskInSemester, validateSemesterInput
+  dateKeyFromTimestamp, getAnalytics, hasSemesterRange, isDateInSemester, sessionInSemester, taskInSemester, validateSemesterInput
 } from './domain.js';
 
 const semester = { name: 'Ganjil 2026', startDate: '2026-08-01', endDate: '2026-12-20' };
@@ -64,5 +64,35 @@ describe('semester interval', () => {
     expect(scoped.focusMinutes).toBe(30);
     expect(scoped.courses[0].count).toBe(1);
     expect(getAnalytics(tasks, sessions, courses, new Date(), { semester: null, scope: 'semester' }).completed).toBe(2);
+  });
+});
+
+describe('tugas tanpa deadline di rentang semester', () => {
+  const buatTugas = (extra = {}) => ({
+    id: 1, text: 'Rapikan catatan kuliah', completed: false, archived: false,
+    dueDate: null, completedAt: null, createdAt: Date.parse('2026-09-01T08:00:00Z'),
+    priority: 'medium', type: 'tugas', estimateMinutes: 25, subtasks: [], ...extra
+  });
+
+  it('tidak memperlakukan stempel waktu kosong sebagai 1 Januari 1970', () => {
+    expect(dateKeyFromTimestamp(null)).toBeNull();
+    expect(dateKeyFromTimestamp(undefined)).toBeNull();
+    expect(dateKeyFromTimestamp(0)).toBeNull();
+    expect(dateKeyFromTimestamp('')).toBeNull();
+    expect(dateKeyFromTimestamp('bukan angka')).toBeNull();
+  });
+
+  it('memakai createdAt ketika tugas belum selesai dan tanpa deadline', () => {
+    expect(taskInSemester(buatTugas(), semester)).toBe(true);
+  });
+
+  it('tetap mengeluarkan tugas yang dibuat sebelum semester dimulai', () => {
+    expect(taskInSemester(buatTugas({ createdAt: Date.parse('2026-05-01T08:00:00Z') }), semester)).toBe(false);
+  });
+
+  it('menghitung tugas tanpa deadline pada analitik bermode semester', () => {
+    const analytics = getAnalytics([buatTugas()], [], [], new Date('2026-09-03T08:00:00Z'), { semester, scope: 'semester' });
+    expect(analytics.scope).toBe('semester');
+    expect(analytics.active).toBe(1);
   });
 });

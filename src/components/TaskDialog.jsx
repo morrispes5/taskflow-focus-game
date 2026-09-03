@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Plus, Trash2 } from 'lucide-react';
-import { getRoleTerminology, getSemesterWeek, validateTaskInput } from '../lib/domain.js';
+import { getMeetingLabel, getRoleTerminology, getSemesterWeek, validateTaskInput } from '../lib/domain.js';
 import { ESTIMATE_OPTIONS, RECURRENCE_LABELS, RECURRENCE_OPTIONS, REMINDER_OFFSETS, TASK_TYPE_LABELS, TASK_TYPES } from '../lib/storage.js';
 import { Modal } from './ui.jsx';
 
@@ -86,7 +86,7 @@ export function TaskDialog({ open, task, courses = [], semester, role = 'mahasis
             <option value="">Tanpa {terms.meetingLabel.toLowerCase()} spesifik</option>
             {availableMeetings.map((m) => (
               <option key={m.id || m.number} value={m.number}>
-                {terms.isAcademic && m.number === 8 ? 'UTS: ' : terms.isAcademic && m.number === 16 ? 'UAS: ' : `${terms.meetingLabel} ${m.number}: `}{m.title || `Topik ${m.number}`}
+                {getMeetingLabel(m.number, terms)}: {m.title || `Topik ${m.number}`}
               </option>
             ))}
           </select>

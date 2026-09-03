@@ -1,26 +1,44 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MotionConfig } from 'motion/react';
-import { loadAppData, saveAppData, resetAppData, WorkspaceConflictError } from './lib/storage.js';
-import { applyTaskToggle, resolveTheme } from './lib/domain.js';
+import { loadAppData, saveAppData, resetAppData, loadWorkspaceSnapshot, WorkspaceConflictError } from './lib/storage.js';
+import { applyTaskSave, applyTaskToggle, resolveTheme } from './lib/domain.js';
 import { getDueReminders, markRemindersNotified, sendNotification } from './lib/reminders.js';
 import { playFeedbackTone } from './lib/audio.js';
 import { AppShell } from './components/AppShell.jsx';
 import { WorkspaceLoading } from './components/ui.jsx';
-import { HomePage } from './pages/HomePage.jsx';
-import { TasksPage } from './pages/TasksPage.jsx';
-import { FocusPage } from './pages/FocusPage.jsx';
-import { CalendarPage } from './pages/CalendarPage.jsx';
-import { AnalyticsPage } from './pages/AnalyticsPage.jsx';
-import { SettingsPage } from './pages/SettingsPage.jsx';
 
 function getCurrentPage() { return document.body.dataset.page || 'home'; }
 
+// TaskFlow adalah multi-page: satu dokumen hanya pernah merender satu halaman.
+// Mengimpor keenam halaman secara statis membuat setiap HTML mengunduh kode
+// halaman yang tidak akan pernah dipakainya.
+const PAGE_MODULES = {
+  home: () => import('./pages/HomePage.jsx').then((module) => ({ default: module.HomePage })),
+  tasks: () => import('./pages/TasksPage.jsx').then((module) => ({ default: module.TasksPage })),
+  calendar: () => import('./pages/CalendarPage.jsx').then((module) => ({ default: module.CalendarPage })),
+  focus: () => import('./pages/FocusPage.jsx').then((module) => ({ default: module.FocusPage })),
+  analytics: () => import('./pages/AnalyticsPage.jsx').then((module) => ({ default: module.AnalyticsPage })),
+  settings: () => import('./pages/SettingsPage.jsx').then((module) => ({ default: module.SettingsPage }))
+};
+
+// Unduhan dimulai saat modul dievaluasi, bukan saat render, supaya berjalan
+// paralel dengan hidrasi IndexedDB dan tidak menambah waktu tunggu.
+// Dialog tugas hanya diunduh saat tangkap cepat benar-benar dibuka, supaya
+// pintasan global ini tidak menambah beban chunk utama setiap halaman.
+const QuickCaptureDialog = lazy(() => import('./components/TaskDialog.jsx').then((module) => ({ default: module.TaskDialog })));
+
+const ACTIVE_PAGE = getCurrentPage();
+const activePageModule = (PAGE_MODULES[ACTIVE_PAGE] || PAGE_MODULES.home)();
+const ActivePage = lazy(() => activePageModule);
+
 export default function TaskFlowApp() {
-  const page = getCurrentPage();
+  const page = ACTIVE_PAGE;
   const [data, setData] = useState(null);
   const [notice, setNotice] = useState(null);
   const [storageError, setStorageError] = useState(null);
   const [tourOpen, setTourOpen] = useState(false);
+  const [recoverySnapshot, setRecoverySnapshot] = useState(null);
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.('(prefers-color-scheme: dark)').matches);
   const dataRef = useRef(data);
   const revisionRef = useRef(0);
@@ -93,6 +111,36 @@ export default function TaskFlowApp() {
     media.addEventListener('change', onChange);
     return () => media.removeEventListener('change', onChange);
   }, []);
+
+  // Reset mengembalikan pengguna ke gerbang profil, tempat Pengaturan tidak
+  // terjangkau. Tanpa jalan pulih di sini, snapshot jadi tidak berguna justru
+  // pada skenario yang paling membutuhkannya.
+  const profileCompleted = data?.onboarding.profileCompleted;
+  useEffect(() => {
+    if (profileCompleted !== false) { setRecoverySnapshot(null); return; }
+    loadWorkspaceSnapshot().then(setRecoverySnapshot).catch(() => setRecoverySnapshot(null));
+  }, [profileCompleted]);
+
+  // Sengaja tidak mengambil snapshot lebih dulu: workspace saat ini kosong dan
+  // menyimpannya justru akan menimpa satu-satunya titik pulih yang ada.
+  const restoreRecoverySnapshot = () => {
+    if (!recoverySnapshot) return undefined;
+    return commit(() => recoverySnapshot.data, 'Snapshot dipulihkan.');
+  };
+
+  // Ide bisa datang di halaman mana pun, termasuk saat Focus Run berjalan.
+  // Ctrl+K menangkapnya tanpa harus pindah halaman lebih dulu.
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key?.toLowerCase() !== 'k' || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+      event.preventDefault();
+      setQuickCaptureOpen(true);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const saveQuickCapture = (input) => commit((current) => applyTaskSave(current, input), 'Tugas ditambahkan.', 'taskAdded');
 
   const theme = data ? resolveTheme(data.preferences.theme, systemDark) : 'light';
 
@@ -189,13 +237,24 @@ export default function TaskFlowApp() {
 
   return (
     <MotionConfig reducedMotion={data.preferences.motion === 'compact' ? 'always' : 'user'}>
-      <AppShell page={page} profile={data.profile} progress={data.progress} onboarding={data.onboarding} notice={notice} tourOpen={tourOpen} reminders={reminders} onCompleteProfile={completeProfile} onCloseTutorial={closeTutorial} onOpenReminders={() => { window.location.href = 'calendar.html'; }}>
-        {page === 'home' && <HomePage data={data} commit={commit} toggleTask={toggleTask} />}
-        {page === 'tasks' && <TasksPage data={data} commit={commit} toggleTask={toggleTask} />}
-        {page === 'calendar' && <CalendarPage data={data} />}
-        {page === 'focus' && <FocusPage data={data} commit={commit} toggleTask={toggleTask} />}
-        {page === 'analytics' && <AnalyticsPage data={data} />}
-        {page === 'settings' && <SettingsPage data={data} commit={commit} updatePreferences={updatePreferences} onStartTutorial={() => setTourOpen(true)} onResetWorkspace={resetWorkspace} />}
+      <AppShell page={page} profile={data.profile} progress={data.progress} onboarding={data.onboarding} notice={notice} tourOpen={tourOpen} reminders={reminders} onCompleteProfile={completeProfile} recoverySnapshot={recoverySnapshot} onRestoreSnapshot={restoreRecoverySnapshot} onCloseTutorial={closeTutorial} onOpenReminders={() => { window.location.href = 'calendar.html'; }}>
+        {/* Setiap halaman hanya memakai prop yang relevan baginya; sisanya diabaikan. */}
+        <Suspense fallback={null}>
+          <ActivePage data={data} commit={commit} toggleTask={toggleTask} updatePreferences={updatePreferences} onStartTutorial={() => setTourOpen(true)} onResetWorkspace={resetWorkspace} />
+        </Suspense>
+        <Suspense fallback={null}>
+          {quickCaptureOpen && (
+            <QuickCaptureDialog
+              open={quickCaptureOpen}
+              task={null}
+              courses={data.courses}
+              semester={data.semester}
+              role={data.profile.role}
+              onClose={() => setQuickCaptureOpen(false)}
+              onSave={saveQuickCapture}
+            />
+          )}
+        </Suspense>
       </AppShell>
     </MotionConfig>
   );

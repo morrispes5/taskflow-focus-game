@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookOpen, Check, FolderOpen, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { BookOpen, Check, FolderOpen, Plus, Trash2 } from 'lucide-react';
 import { getCourseMeetingsProgress, getRoleTerminology, getSemesterSksSummary, validateCourseInput } from '../lib/domain.js';
 import { COURSE_COLORS, WEEKDAY_LABELS } from '../lib/storage.js';
 import { CourseMeetingModal } from './CourseMeetingModal.jsx';
@@ -117,7 +117,14 @@ export function CourseManager({ courses, role = 'mahasiswa', onSave, onDelete, o
           <div className="field-group"><label htmlFor="course-lecturer">{terms.isAcademic ? 'Dosen / Pengajar' : 'Penanggung Jawab / Klien'}</label><input id="course-lecturer" className="input" value={form.lecturer} onChange={(event) => setForm((current) => ({ ...current, lecturer: event.target.value }))} maxLength={48} /></div>
           <div className="field-group"><label htmlFor="course-sks">{terms.sksLabel} <span className="label-hint">opsional (1–8)</span></label><input id="course-sks" className="input" type="number" min="1" max="8" value={form.sks} onChange={(event) => setForm((current) => ({ ...current, sks: event.target.value }))} /></div>
         </div>
-        <div className="field-group"><label htmlFor="course-drive">{terms.driveHint} <span className="label-hint">opsional</span></label><div className="input-with-icon"><FolderOpen size={16} aria-hidden="true" /><input id="course-drive" className="input" type="url" value={form.driveUrl} onChange={(event) => { setForm((current) => ({ ...current, driveUrl: event.target.value })); if (error?.field === 'driveUrl') setError(null); }} placeholder="https://drive.google.com/..." aria-invalid={error?.field === 'driveUrl'} /></div><p className="field-error" role="alert">{error?.field === 'driveUrl' ? error.message : ''}</p></div>
+        <div className="field-group">
+          <label htmlFor="course-drive">{terms.driveHint} <span className="label-hint">opsional</span></label>
+          <div className="input-with-icon">
+            <FolderOpen size={16} aria-hidden="true" />
+            <input id="course-drive" className="input" type="url" value={form.driveUrl} onChange={(event) => { setForm((current) => ({ ...current, driveUrl: event.target.value })); if (error?.field === 'driveUrl') setError(null); }} placeholder="https://drive.google.com/..." aria-invalid={error?.field === 'driveUrl'} />
+          </div>
+          <p className="field-error" role="alert">{error?.field === 'driveUrl' ? error.message : ''}</p>
+        </div>
         <fieldset className="color-field"><legend>Warna</legend><div className="color-row">{COURSE_COLORS.map((color) => <label key={color} className={form.color === color ? 'active' : ''}><input type="radio" name="course-color" checked={form.color === color} onChange={() => setForm((current) => ({ ...current, color }))} /><i style={{ background: color }} /></label>)}</div></fieldset>
         <div className="schedule-editor">
           <p className="section-kicker">{terms.isAcademic ? 'Jadwal kuliah' : 'Jadwal rutin'}</p>

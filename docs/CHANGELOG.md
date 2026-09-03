@@ -1,5 +1,55 @@
 # Changelog
 
+## 5.3.0 - Guardrail, perbaikan bug, performa, keamanan data, kebersihan kode, dan tiga fitur
+
+Skema tetap **v8**. Seluruh perubahan additive dan tidak menyentuh data pengguna yang sedang berjalan. Tes naik dari 67 ke 130.
+
+### Guardrail
+
+- ESLint flat config dengan `react-hooks/rules-of-hooks` dan `react/jsx-uses-vars`. Aturan pertama langsung menemukan satu bug nyata di Focus Run.
+- Tes komponen diaktifkan. `jsdom` dan `@testing-library/react` sudah lama terpasang tetapi tidak pernah terpakai karena Vitest hanya memuat `*.test.js` di environment node. Sekarang `*.test.jsx` berjalan di jsdom lewat `environmentMatchGlobs`, dengan `fake-indexeddb` dan `cleanup()` di `src/test/setup.js`.
+- `script.js` legacy (277 baris, tidak direferensikan HTML mana pun) dihapus.
+- Versi `package.json` disinkronkan dengan changelog.
+
+### Bug
+
+- **`useReducedMotion` dipanggil bersyarat** di FocusPage. Hook berada di sisi kanan `||`, sehingga jumlah hook berubah antar render dan halaman fokus mati di tengah sesi ketika preferensi motion diubah dari tab lain.
+- **Streak yang ditampilkan basi.** `progress.currentStreak` hanya diperbarui saat ada aktivitas, jadi pengguna yang absen berhari-hari tetap melihat angka lama. `getDisplayStreak` menghitung tampilan dengan aturan freeze yang sama persis dengan `updateStreak`, tanpa menulis apa pun. Streak putus ditampilkan sebagai keadaan yang dijelaskan, bukan angka `0` telanjang, dan `bestStreak` tetap terlihat.
+- **Tugas tanpa deadline hilang dari analitik semester.** `Number(null)` bernilai 0 dan lolos `Number.isFinite`, sehingga `dateKeyFromTimestamp(null)` mengembalikan `'1970-01-01'` dan rantai fallback di `taskInSemester` tidak pernah sampai ke `createdAt`.
+- **Id judul dialog tidak unik.** Halaman Fokus memasang empat `<dialog>` sekaligus dengan `id="dialog-title"` yang sama; kini memakai `useId()`.
+- **Shortcut `N`** di halaman Tugas ikut membajak `Ctrl+N` milik peramban.
+
+### Performa
+
+- Aset deploy turun dari **40 MB ke 7,1 MB**. Audio 32,8 MB ke 6,2 MB: lo-fi dipertahankan durasi penuhnya pada 96 kb/s stereo, hujan menjadi 56 kb/s mono, dan `rain-02` dipangkas dari 10 menit ke 4 menit. Ilustrasi PNG 1254 px (6,35 MB) menjadi WebP 1000 px (179 KB) dengan `loading="lazy"`, kecuali hero Beranda yang tetap eager.
+- Halaman dimuat lewat `React.lazy` melalui `PAGE_MODULES`, dengan unduhan dimulai saat modul dievaluasi supaya paralel dengan hidrasi IndexedDB. Chunk bersama turun dari 560 kB ke 425 kB dan setiap dokumen hanya memuat kode halamannya sendiri.
+- Service worker beralih ke cache-first untuk `/assets/` dan network-first untuk dokumen; permintaan lintas-origin dilewatkan dan respons non-ok tidak disimpan. `CACHE` naik ke `taskflow-v5`.
+
+### Keamanan data
+
+- **Snapshot pemulihan** pada key baru `app-data-snapshot`, diambil sebelum reset dan import, ditulis di transaksi terpisah dengan kegagalan yang ditelan supaya tidak pernah bisa menggagalkan penyimpanan pengguna.
+- Reset mengembalikan pengguna ke gerbang profil tempat Pengaturan tidak terjangkau, jadi **gerbang profil kini menawarkan pemulihan** bila snapshot tersedia. Pemulihan dari sana sengaja tidak mengambil snapshot lebih dulu agar titik pulih satu-satunya tidak tertimpa.
+- `preferences.lastBackupAt` dicatat saat Export JSON, dengan pengingat tenang di kartu backup setelah 14 hari atau bila belum pernah membuat backup.
+- Opsi menandai penyimpanan sebagai persisten, di balik tombol eksplisit karena `persist()` memunculkan permintaan izin di sebagian peramban.
+
+### Kebersihan kode
+
+- Aturan label pertemuan diketik ulang di enam tempat dan tiga di antaranya lupa memeriksa peran, sehingga pengguna Profesional melihat milestone-nya diberi label UTS. `getMeetingBadge` dan `getMeetingLabel` menjadi satu-satunya sumber aturan.
+- `saveTask` yang disalin di dua halaman dengan perilaku trim berbeda disatukan menjadi `applyTaskSave`.
+- `PRIORITY_LABELS` dan `WEEKDAY_LABELS` sudah lama diekspor tetapi tetap diketik ulang; kini dipakai. `formatTimer` dan nama bulan Indonesia dipindahkan ke `domain.js`.
+- Baris JSX terpanjang turun dari 2778 ke 542 karakter. Blok besar diekstrak ke `components/focus`, `components/home`, dan `components/settings` dengan markup dan className dipindahkan verbatim sehingga CSS tidak tersentuh.
+
+### Fitur
+
+- **Tunda cepat.** Menu tugas dan baris terlambat di agenda Beranda menawarkan Tunda ke besok dan Tunda ke akhir pekan. Hanya menggeser `dueDate`; tidak muncul untuk tugas yang sudah selesai.
+- **Tutup minggu.** Bagian di Analitik yang memisahkan yang selesai, yang lewat tanggalnya, yang masih menunggu, dan menit fokus minggu berjalan, dengan satu aksi membawa tugas yang meleset ke minggu depan pada hari yang sama. Terbuka sendiri di akhir pekan, di hari lain hanya satu tautan.
+- **Tangkap cepat global.** `Ctrl+K` membuka dialog tugas dari halaman mana pun, termasuk saat Focus Run berjalan. Dialognya dimuat lewat `React.lazy`.
+
+### Sengaja tidak dikerjakan
+
+- **Import mode gabung** dibatalkan. Ini satu-satunya jalur yang bila keliru dapat menghilangkan tugas atau menggandakan XP, sementara snapshot pemulihan sudah menutup skenario yang mendasarinya.
+- **Memecah `components.css`** dibatalkan. Kaskade CSS bergantung pada urutan impor sehingga risikonya regresi visual menyeluruh, sedangkan masalah keterbacaan yang mendasarinya sudah selesai lewat ekstraksi komponen.
+
 ## 5.2.3 - Storage security hardening
 
 - Migrasi `localStorage` legacy kini additive: data dipindahkan saat IndexedDB kosong dan key lama baru dibersihkan setelah transaksi sukses.

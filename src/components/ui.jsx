@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Check, Sparkles, X } from 'lucide-react';
 
 export function PageActions({ children }) { return <div className="page-actions">{children}</div>; }
 
-export function Illustration({ type, alt, className = '' }) {
+// Ilustrasi disajikan sebagai WebP. Peramban yang tidak mendukungnya jatuh ke
+// illustration-fallback lewat onError yang sudah ada.
+export function Illustration({ type, alt, className = '', loading = 'lazy' }) {
   const [failed, setFailed] = useState(false);
   if (failed) return <div className={`illustration-fallback illustration-${type} ${className}`} aria-hidden="true"><Sparkles size={28} /></div>;
-  return <img className={`illustration illustration-${type} ${className}`} src={`${import.meta.env.BASE_URL}assets/illustrations/${type}.png`} alt={alt} onError={() => setFailed(true)} />;
+  return <img className={`illustration illustration-${type} ${className}`} src={`${import.meta.env.BASE_URL}assets/illustrations/${type}.webp`} alt={alt} loading={loading} decoding="async" onError={() => setFailed(true)} />;
 }
 
 export function StatCard({ label, value, hint, icon: Icon, accent = '' }) {
@@ -25,13 +27,26 @@ export function EmptyState({ type = 'empty-task', title, message, action, onActi
 
 export function Modal({ open, onClose, title, eyebrow = 'TaskFlow', children, compact = false }) {
   const dialogRef = useRef(null);
+  // Semua <dialog> tetap ter-render walau tertutup, jadi id statis akan bentrok
+  // di halaman yang memasang beberapa modal sekaligus (Fokus memasang empat).
+  const titleId = useId();
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (open && !dialog.open) dialog.showModal();
     if (!open && dialog.open) dialog.close();
   }, [open]);
-  return <dialog ref={dialogRef} className={`dialog ${compact ? 'dialog-compact' : ''}`} onCancel={(event) => { event.preventDefault(); onClose(); }} onClose={onClose} aria-labelledby="dialog-title"><motion.div key={open ? 'open' : 'closed'} className="dialog-card" initial={{ opacity: 0, scale: 0.98, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}><div className="dialog-header"><div><p className="section-kicker">{eyebrow}</p><h2 id="dialog-title">{title}</h2></div><button className="icon-button" type="button" onClick={onClose} aria-label="Tutup dialog" title="Tutup"><X size={18} /></button></div>{children}</motion.div></dialog>;
+  return (
+    <dialog ref={dialogRef} className={`dialog ${compact ? 'dialog-compact' : ''}`} onCancel={(event) => { event.preventDefault(); onClose(); }} onClose={onClose} aria-labelledby={titleId}>
+      <motion.div key={open ? 'open' : 'closed'} className="dialog-card" initial={{ opacity: 0, scale: 0.98, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}>
+        <div className="dialog-header">
+          <div><p className="section-kicker">{eyebrow}</p><h2 id={titleId}>{title}</h2></div>
+          <button className="icon-button" type="button" onClick={onClose} aria-label="Tutup dialog" title="Tutup"><X size={18} /></button>
+        </div>
+        {children}
+      </motion.div>
+    </dialog>
+  );
 }
 
 export function ConfirmDialog({ open, title, message, confirmLabel = 'Lanjutkan', danger = false, onClose, onConfirm }) {

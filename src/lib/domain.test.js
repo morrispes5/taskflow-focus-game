@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays } from 'date-fns';
 import {
-  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, finishFocusRun, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDashboardStats, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
+  applySessionReward, applyTaskToggle, autoPauseFocus, beginDistraction, closeActiveFocusForReplacement, closeDistraction, createActiveFocus, filterTasks, finishFocusRun, getAgendaForDay, getAnalytics, getCalendarDays, getCountdownLabel, getDashboardStats, getDistractionSummary, getFocusActiveSeconds, getFocusControlAvailability, getFocusTimerState, getLevel, getRewardableFocusSeconds, getSessionXp, applySnooze, applyTaskSave, applyWeekCarryOver, formatDayDate, getSnoozeDate, getWeekReview, getBackupReminder, getDisplayStreak, getMeetingBadge, getMeetingLabel, getStreakFreezeInfo, getStreakFreezesRemaining, getTaskFocusMinutes,
   getProfileRecommendations, getTaskXp, getTodayAgenda, getUpcomingDeadlines, makeCourse, makeTask,
   getSemesterWeek, replaceActiveFocus, resumeDistraction, selectDailyMission, selectReviewTask, sortTasks, spawnNextOccurrence, todayString, updateStreak, validateCourseInput, validateProfileInput, validateTaskInput,
   validateMeetingInput, generateDefaultMeetings, getSemesterSksSummary, getCourseMeetingsProgress, getRoleTerminology
@@ -372,5 +372,212 @@ describe('task domain', () => {
     expect(recurringNext.meetingNumber).toBe(1);
     expect(recurringNext.courseId).toBe(10);
     expect(recurringNext.dueDate).toBe('2026-09-08');
+  });
+});
+
+describe('getDisplayStreak', () => {
+  const base = (overrides = {}) => ({ totalXp: 0, level: 1, currentStreak: 7, bestStreak: 9, lastActiveDate: '2026-08-30', streakFreezeMonth: '2026-08', streakFreezesUsed: 0, ...overrides });
+
+  it('mempertahankan streak saat aktif hari ini atau kemarin', () => {
+    expect(getDisplayStreak(base(), '2026-08-30')).toMatchObject({ value: 7, broken: false });
+    expect(getDisplayStreak(base(), '2026-08-31')).toMatchObject({ value: 7, broken: false });
+  });
+
+  it('mempertahankan streak selama kuota freeze bulan itu masih menutupi hari terlewat', () => {
+    expect(getDisplayStreak(base(), '2026-09-01')).toMatchObject({ value: 7, broken: false });
+    expect(getDisplayStreak(base(), '2026-09-02')).toMatchObject({ value: 7, broken: false });
+  });
+
+  it('menandai streak putus ketika hari terlewat melebihi kuota freeze', () => {
+    expect(getDisplayStreak(base(), '2026-09-14')).toMatchObject({ value: 0, broken: true, bestStreak: 9 });
+  });
+
+  it('menghormati freeze yang sudah terpakai bulan berjalan', () => {
+    const used = base({ lastActiveDate: '2026-08-26', streakFreezesUsed: 3 });
+    expect(getDisplayStreak(used, '2026-08-28')).toMatchObject({ value: 0, broken: true });
+  });
+
+  it('tidak menyatakan putus tanpa lastActiveDate atau tanpa streak', () => {
+    expect(getDisplayStreak(base({ lastActiveDate: null }), '2026-09-14')).toMatchObject({ value: 7, broken: false });
+    expect(getDisplayStreak(base({ currentStreak: 0 }), '2026-09-14')).toMatchObject({ value: 0, broken: false });
+  });
+
+  it('setuju dengan updateStreak: yang ditampilkan putus juga direset olehnya', () => {
+    const stale = base();
+    expect(getDisplayStreak(stale, '2026-09-14').broken).toBe(true);
+    expect(updateStreak(stale, '2026-09-14').currentStreak).toBe(1);
+  });
+});
+
+describe('getBackupReminder', () => {
+  const at = Date.parse('2026-09-02T10:00:00Z');
+  const workspace = (lastBackupAt, extra = {}) => ({ tasks: [task()], sessions: [], preferences: { lastBackupAt }, ...extra });
+
+  it('diam saja pada workspace yang masih kosong', () => {
+    expect(getBackupReminder({ tasks: [], sessions: [], preferences: { lastBackupAt: null } }, at)).toBeNull();
+  });
+
+  it('mengingatkan pengguna yang belum pernah membuat backup', () => {
+    expect(getBackupReminder(workspace(null), at)).toMatchObject({ days: null });
+  });
+
+  it('diam selama backup masih baru', () => {
+    expect(getBackupReminder(workspace(at - 3 * 86400000), at)).toBeNull();
+    expect(getBackupReminder(workspace(at - 13 * 86400000), at)).toBeNull();
+  });
+
+  it('mengingatkan setelah ambang hari terlampaui', () => {
+    expect(getBackupReminder(workspace(at - 14 * 86400000), at)).toMatchObject({ days: 14 });
+    expect(getBackupReminder(workspace(at - 40 * 86400000), at)).toMatchObject({ days: 40 });
+  });
+
+  it('memperlakukan sesi fokus sebagai data yang layak di-backup', () => {
+    expect(getBackupReminder({ tasks: [], sessions: [{ id: 1 }], preferences: { lastBackupAt: null } }, at)).not.toBeNull();
+  });
+});
+
+describe('label pertemuan', () => {
+  const academic = getRoleTerminology('mahasiswa');
+  const professional = getRoleTerminology('profesional');
+
+  it('memberi UTS dan UAS hanya untuk peran akademik', () => {
+    expect(getMeetingBadge(8, academic)).toBe('UTS');
+    expect(getMeetingBadge(16, academic)).toBe('UAS');
+    expect(getMeetingBadge(8, professional)).toBe('P8');
+    expect(getMeetingBadge(16, professional)).toBe('P16');
+  });
+
+  it('memakai penomoran biasa untuk pertemuan lain', () => {
+    expect(getMeetingBadge(3, academic)).toBe('P3');
+    expect(getMeetingBadge(null, academic)).toBe('');
+  });
+
+  it('mengikuti istilah peran pada label panjang', () => {
+    expect(getMeetingLabel(3, academic)).toBe('Pertemuan 3');
+    expect(getMeetingLabel(3, professional)).toBe('Milestone 3');
+    expect(getMeetingLabel(8, academic)).toBe('UTS');
+    expect(getMeetingLabel(8, professional)).toBe('Milestone 8');
+  });
+});
+
+describe('applyTaskSave', () => {
+  const base = () => ({ tasks: [makeTask({ text: 'Tugas lama', priority: 'low' }, 1)] });
+
+  it('menambahkan tugas baru di paling atas ketika tanpa id', () => {
+    const next = applyTaskSave(base(), { text: 'Tugas baru' });
+    expect(next.tasks).toHaveLength(2);
+    expect(next.tasks[0].text).toBe('Tugas baru');
+  });
+
+  it('memperbarui tugas yang cocok dan merapikan field opsional', () => {
+    const next = applyTaskSave(base(), { text: '  Judul dirapikan  ', category: '  Kuliah  ', dueDate: '', dueTime: '', estimateMinutes: '50', courseId: '', meetingNumber: '' }, 1, 999);
+    expect(next.tasks[0]).toMatchObject({ text: 'Judul dirapikan', category: 'Kuliah', dueDate: null, dueTime: null, estimateMinutes: 50, courseId: null, meetingNumber: null, updatedAt: 999 });
+  });
+
+  it('tidak menyentuh tugas lain', () => {
+    const data = { tasks: [makeTask({ text: 'Satu' }, 1), makeTask({ text: 'Dua' }, 2)] };
+    const next = applyTaskSave(data, { text: 'Satu diubah' }, 1, 500);
+    expect(next.tasks[1]).toBe(data.tasks[1]);
+  });
+
+  it('mengabaikan id yang tidak ada tanpa mengubah apa pun', () => {
+    const data = base();
+    expect(applyTaskSave(data, { text: 'Tidak terpakai' }, 99).tasks[0].text).toBe('Tugas lama');
+  });
+});
+
+describe('formatDayDate', () => {
+  it('memakai nama hari dan bulan Indonesia', () => {
+    expect(formatDayDate(new Date(2026, 8, 2))).toBe('Rabu, 2 Sep');
+    expect(formatDayDate(new Date(2026, 0, 1))).toBe('Kamis, 1 Jan');
+  });
+});
+
+describe('tunda cepat', () => {
+  const rabu = new Date(2026, 8, 2);
+
+  it('menunda ke hari berikutnya', () => {
+    expect(getSnoozeDate('tomorrow', rabu)).toBe('2026-09-03');
+  });
+
+  it('menunda ke Sabtu terdekat, dan ke Sabtu berikutnya bila hari ini Sabtu', () => {
+    expect(getSnoozeDate('weekend', rabu)).toBe('2026-09-05');
+    expect(getSnoozeDate('weekend', new Date(2026, 8, 5))).toBe('2026-09-12');
+  });
+
+  it('hanya menggeser deadline tanpa menyentuh status atau riwayat', () => {
+    const data = { tasks: [makeTask({ text: 'Laporan', dueDate: '2026-08-20', priority: 'high' }, 1)] };
+    const next = applySnooze(data, 1, 'tomorrow', rabu.getTime());
+    expect(next.tasks[0]).toMatchObject({ dueDate: '2026-09-03', completed: false, priority: 'high' });
+    expect(next.tasks[0].createdAt).toBe(data.tasks[0].createdAt);
+  });
+
+  it('mengabaikan target yang tidak dikenal', () => {
+    const data = { tasks: [makeTask({ text: 'Laporan', dueDate: '2026-08-20' }, 1)] };
+    expect(applySnooze(data, 1, 'entahlah')).toBe(data);
+  });
+});
+
+describe('tutup minggu', () => {
+  // Kamis 3 September 2026; minggunya Senin 31 Agustus sampai Minggu 6 September.
+  const kamis = new Date(2026, 8, 3, 12);
+  const tugas = (id, extra) => makeTask({ text: `Tugas ${id}`, ...extra }, id);
+
+  it('memisahkan yang selesai, yang meleset, dan yang masih menunggu', () => {
+    const tasks = [
+      { ...tugas(1, { dueDate: '2026-09-01' }), completed: true, completedAt: new Date(2026, 8, 1, 10).getTime() },
+      tugas(2, { dueDate: '2026-09-01' }),
+      tugas(3, { dueDate: '2026-09-03' }),
+      tugas(4, { dueDate: '2026-09-05' })
+    ];
+    const review = getWeekReview(tasks, [], kamis);
+    expect(review.completed.map((task) => task.id)).toEqual([1]);
+    expect(review.slipped.map((task) => task.id)).toEqual([2]);
+    expect(review.upcoming.map((task) => task.id)).toEqual([3, 4]);
+  });
+
+  it('tidak menyebut tugas yang jatuh tempo hari ini sebagai meleset', () => {
+    expect(getWeekReview([tugas(9, { dueDate: '2026-09-03' })], [], kamis).slipped).toEqual([]);
+  });
+
+  it('mengabaikan tugas di luar minggu berjalan', () => {
+    const review = getWeekReview([tugas(5, { dueDate: '2026-08-25' }), tugas(6, { dueDate: '2026-09-14' })], [], kamis);
+    expect(review.slipped).toEqual([]);
+    expect(review.upcoming).toEqual([]);
+  });
+
+  it('menjumlahkan menit fokus dari sesi minggu ini saja', () => {
+    const sessions = [
+      { id: 1, status: 'completed', mode: 'focus', activeSeconds: 1500, startedAt: new Date(2026, 8, 1).getTime(), endedAt: new Date(2026, 8, 1).getTime() },
+      { id: 2, status: 'completed', mode: 'focus', activeSeconds: 600, startedAt: new Date(2026, 7, 20).getTime(), endedAt: new Date(2026, 7, 20).getTime() },
+      { id: 3, status: 'completed', mode: 'review', activeSeconds: 900, startedAt: new Date(2026, 8, 2).getTime(), endedAt: new Date(2026, 8, 2).getTime() }
+    ];
+    const review = getWeekReview([], sessions, kamis);
+    expect(review.focusMinutes).toBe(25);
+    expect(review.sessionsCompleted).toBe(1);
+  });
+
+  it('memberi label rentang minggu yang terbaca', () => {
+    expect(getWeekReview([], [], kamis).label).toBe('31 Agu – 6 Sep');
+  });
+});
+
+describe('bawa ke minggu depan', () => {
+  it('mempertahankan hari yang sama pada minggu berikutnya', () => {
+    const data = { tasks: [makeTask({ text: 'Satu', dueDate: '2026-09-01' }, 1), makeTask({ text: 'Dua', dueDate: '2026-09-02' }, 2)] };
+    const next = applyWeekCarryOver(data, [1, 2], 999);
+    expect(next.tasks.map((task) => task.dueDate)).toEqual(['2026-09-08', '2026-09-09']);
+    expect(next.tasks[0].updatedAt).toBe(999);
+  });
+
+  it('tidak menyentuh tugas yang tidak dipilih atau tanpa deadline', () => {
+    const data = { tasks: [makeTask({ text: 'Satu', dueDate: '2026-09-01' }, 1), makeTask({ text: 'Dua' }, 2)] };
+    const next = applyWeekCarryOver(data, [1, 2]);
+    expect(next.tasks[1].dueDate).toBeNull();
+  });
+
+  it('mengembalikan data apa adanya ketika tidak ada yang dipilih', () => {
+    const data = { tasks: [makeTask({ text: 'Satu', dueDate: '2026-09-01' }, 1)] };
+    expect(applyWeekCarryOver(data, [])).toBe(data);
   });
 });

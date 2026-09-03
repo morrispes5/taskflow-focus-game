@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Check, Flame, Menu, X, Zap } from 'lucide-react';
 import { MOBILE_NAV_ITEMS, NAV_ITEMS, PAGE_META } from '../nav.js';
+import { getDisplayStreak } from '../lib/domain.js';
 import { OnboardingTour, ProfileGate } from './Onboarding.jsx';
 import { ReminderBanner } from './ui.jsx';
 
-export function AppShell({ page, profile, progress, onboarding, notice, tourOpen, reminders = [], onCompleteProfile, onCloseTutorial, onOpenReminders, children }) {
+export function AppShell({ page, profile, progress, onboarding, notice, tourOpen, reminders = [], onCompleteProfile, onCloseTutorial, onOpenReminders, recoverySnapshot = null, onRestoreSnapshot, children }) {
   const meta = PAGE_META[page] || PAGE_META.home;
+  const streak = getDisplayStreak(progress);
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div className={`app-frame app-frame-${page}`}>
@@ -25,13 +27,13 @@ export function AppShell({ page, profile, progress, onboarding, notice, tourOpen
           </div>
           <div className="header-progress" title={`${progress.totalXp} XP`}>
             <span className="header-level"><Zap size={14} aria-hidden="true" /> Lv {progress.level}</span>
-            <span className="header-streak"><Flame size={14} aria-hidden="true" /> {progress.currentStreak}</span>
+            <span className="header-streak" title={streak.broken ? `Streak putus. Terbaik ${streak.bestStreak} hari.` : `${streak.value} hari berturut-turut`}><Flame size={14} aria-hidden="true" /> {streak.value}</span>
           </div>
           <button className="icon-button menu-button" type="button" aria-label={menuOpen ? 'Tutup menu' : 'Buka menu'} aria-expanded={menuOpen} title={menuOpen ? 'Tutup menu' : 'Buka menu'} onClick={() => setMenuOpen((current) => !current)}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
         </nav>
       </header>
       <main className="container page-shell">
-        {!onboarding.profileCompleted ? <ProfileGate profile={profile} onComplete={onCompleteProfile} /> : <>
+        {!onboarding.profileCompleted ? <ProfileGate profile={profile} onComplete={onCompleteProfile} recoverySnapshot={recoverySnapshot} onRestoreSnapshot={onRestoreSnapshot} /> : <>
         {page !== 'focus' && page !== 'home' && (
           <motion.section className="page-heading" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28 }}>
             <div>

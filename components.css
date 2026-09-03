@@ -629,3 +629,8 @@ textarea.input { min-height: 92px; padding-block: 11px; resize: vertical; }
   .focus-desk, .focus-distraction, .focus-checklist, .focus-recap { grid-template-columns: 1fr; }
   .focus-start-notice { top: 12px; max-width: calc(100vw - 28px); }
 }
+
+/* Tutup minggu muncul sendiri di akhir pekan; di hari lain ia hanya satu tautan tenang. */
+.analytics-week-toggle { align-self: flex-start; margin: 4px 0 2px; }
+.week-review .metric-list li { gap: 12px; }
+.week-review .btn { align-self: flex-start; margin-top: 4px; }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BookOpen, Check, ExternalLink, FolderOpen, Plus, Sparkles, Trash2 } from 'lucide-react';
-import { generateDefaultMeetings, getCourseMeetingsProgress, getRoleTerminology, validateMeetingInput } from '../lib/domain.js';
+import { generateDefaultMeetings, getCourseMeetingsProgress, getMeetingBadge, getMeetingLabel, getRoleTerminology, validateMeetingInput } from '../lib/domain.js';
 import { MAX_MEETINGS } from '../lib/storage.js';
 import { CourseDot, Modal, ProgressMeter } from './ui.jsx';
 
@@ -132,7 +132,7 @@ export function CourseMeetingModal({ open, course, role = 'mahasiswa', onClose, 
                         <span className="meeting-check" aria-hidden="true"><Check size={13} /></span>
                       </label>
                       <span className={`meeting-badge ${isExam ? 'meeting-badge-exam' : ''}`}>
-                        {terms.isAcademic && meeting.number === 8 ? 'UTS' : terms.isAcademic && meeting.number === 16 ? 'UAS' : `P${meeting.number}`}
+                        {getMeetingBadge(meeting.number, terms)}
                       </span>
 
                       {!isEditing ? (
@@ -198,7 +198,7 @@ export function CourseMeetingModal({ open, course, role = 'mahasiswa', onClose, 
                             className="btn btn-secondary btn-tiny"
                             type="button"
                             onClick={() => onCreateTaskForMeeting(course, meeting)}
-                            title={`Buat tugas baru untuk ${terms.meetingLabel} ${meeting.number}`}
+                            title={`Buat tugas baru untuk ${getMeetingLabel(meeting.number, terms)}`}
                           >
                             <Plus size={13} />Tugas
                           </button>
@@ -214,7 +214,7 @@ export function CourseMeetingModal({ open, course, role = 'mahasiswa', onClose, 
                           className="icon-button danger-hover"
                           type="button"
                           onClick={() => handleDeleteMeeting(meeting.id)}
-                          aria-label={`Hapus ${terms.meetingLabel} ${meeting.number}`}
+                          aria-label={`Hapus ${getMeetingLabel(meeting.number, terms)}`}
                           title="Hapus pertemuan"
                         >
                           <Trash2 size={14} />

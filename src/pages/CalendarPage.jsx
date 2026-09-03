@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { addMonths, format } from 'date-fns';
-import { ArrowLeft, ArrowRight, BookOpen, FolderOpen } from 'lucide-react';
-import { getAgendaForDay, getCalendarDays, getCalendarMarks, getRoleTerminology, getSemesterSksSummary, todayString } from '../lib/domain.js';
+import { ArrowLeft, ArrowRight, FolderOpen } from 'lucide-react';
+import { getAgendaForDay, getCalendarDays, getCalendarMarks, getMeetingBadge, getMeetingLabel, getRoleTerminology, getSemesterSksSummary, todayString } from '../lib/domain.js';
 import { CourseDot } from '../components/ui.jsx';
 
 const WEEKDAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
@@ -49,8 +49,8 @@ export function CalendarPage({ data }) {
           <div className="agenda-title-wrap">
             <strong className={item.completed ? 'is-done' : ''}>{item.title}</strong>
             {meetingNum && (
-              <span className="category-badge meeting-tag-badge" title={`${terms.meetingLabel} ${meetingNum}`}>
-                {terms.isAcademic && meetingNum === 8 ? 'UTS' : terms.isAcademic && meetingNum === 16 ? 'UAS' : `P${meetingNum}`}
+              <span className="category-badge meeting-tag-badge" title={getMeetingLabel(meetingNum, terms)}>
+                {getMeetingBadge(meetingNum, terms)}
               </span>
             )}
           </div>

@@ -331,3 +331,78 @@ describe('storage migration', () => {
     expect(restored.onboarding).toEqual(original.onboarding);
   });
 });
+
+describe('snapshot pemulihan', () => {
+  const withTasks = (data, text) => ({ ...data, tasks: [normalizeTask({ id: 1, text, completed: false, createdAt: 1 })] });
+
+  it('tidak punya snapshot pada workspace baru', async () => {
+    const { store } = createStore();
+    await store.load();
+    expect(await store.readSnapshot()).toBeNull();
+  });
+
+  it('menyimpan keadaan sebelum reset sehingga data lama masih bisa dipulihkan', async () => {
+    const { store } = createStore();
+    const loaded = await store.load();
+    const saved = await store.save(withTasks(loaded.data, 'Laporan akhir semester'), loaded.revision);
+
+    const reset = await store.reset(saved.revision);
+    expect(reset.data.tasks).toEqual([]);
+
+    const snapshot = await store.readSnapshot();
+    expect(snapshot.reason).toBe('reset');
+    expect(snapshot.data.tasks.map((task) => task.text)).toEqual(['Laporan akhir semester']);
+  });
+
+  it('menyimpan keadaan sebelum import dan tidak tertimpa oleh import itu sendiri', async () => {
+    const { store } = createStore();
+    const loaded = await store.load();
+    const saved = await store.save(withTasks(loaded.data, 'Tugas yang sedang berjalan'), loaded.revision);
+
+    await store.captureSnapshot('import');
+    const imported = await store.save(withTasks(saved.data, 'Isi backup lama'), saved.revision);
+    expect(imported.data.tasks.map((task) => task.text)).toEqual(['Isi backup lama']);
+
+    const snapshot = await store.readSnapshot();
+    expect(snapshot.reason).toBe('import');
+    expect(snapshot.data.tasks.map((task) => task.text)).toEqual(['Tugas yang sedang berjalan']);
+  });
+
+  it('menyimpan snapshot di key terpisah sehingga app-data dan revision tidak berubah', async () => {
+    const { store } = createStore();
+    const loaded = await store.load();
+    const saved = await store.save(withTasks(loaded.data, 'Tetap utuh'), loaded.revision);
+
+    await store.captureSnapshot('import');
+
+    const after = await store.load();
+    expect(after.revision).toBe(saved.revision);
+    expect(after.data.tasks.map((task) => task.text)).toEqual(['Tetap utuh']);
+  });
+
+  it('tidak ikut masuk ke backup', async () => {
+    const { store } = createStore();
+    const loaded = await store.load();
+    const saved = await store.save(withTasks(loaded.data, 'Tugas nyata'), loaded.revision);
+    await store.captureSnapshot('import');
+    expect(Object.keys(createBackup(saved.data))).not.toContain('snapshot');
+  });
+});
+
+describe('preferensi lastBackupAt', () => {
+  it('default null dan tetap additive untuk workspace lama', () => {
+    expect(normalizeAppData({}).preferences.lastBackupAt).toBeNull();
+    expect(normalizeAppData({ preferences: { theme: 'dark' } }).preferences).toMatchObject({ theme: 'dark', lastBackupAt: null });
+  });
+
+  it('mempertahankan stempel waktu yang sah dan menolak yang tidak masuk akal', () => {
+    expect(normalizeAppData({ preferences: { lastBackupAt: 1756000000000 } }).preferences.lastBackupAt).toBe(1756000000000);
+    expect(normalizeAppData({ preferences: { lastBackupAt: 'kemarin' } }).preferences.lastBackupAt).toBeNull();
+    expect(normalizeAppData({ preferences: { lastBackupAt: -5 } }).preferences.lastBackupAt).toBeNull();
+  });
+
+  it('bertahan pada round-trip backup', () => {
+    const data = normalizeAppData({ preferences: { lastBackupAt: 1756000000000 } });
+    expect(parseBackupPayload(createBackup(data)).preferences.lastBackupAt).toBe(1756000000000);
+  });
+});
