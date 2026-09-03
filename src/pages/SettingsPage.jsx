@@ -109,7 +109,7 @@ export function SettingsPage({ data, commit, updatePreferences, onStartTutorial,
       <label className="setting-row"><span><strong>Volume soundscape</strong><small>{data.preferences.focusSoundVolume}% saat sesi fokus berjalan.</small></span><input className="range-input" type="range" min="0" max="100" value={data.preferences.focusSoundVolume} onChange={(event) => updatePreferences({ focusSoundVolume: Number(event.target.value) })} aria-label="Volume soundscape" /></label>
       <label className="setting-row"><span><strong>Pengingat browser</strong><small>Hanya berjalan saat TaskFlow terbuka atau terpasang sebagai aplikasi.</small></span><button className="btn btn-secondary" type="button" onClick={enableNotify}>{data.preferences.notify ? 'Izin sudah aktif' : 'Izinkan pengingat'}</button></label>
     </div></article>
-    <article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Bantuan</p><h2>Kenali TaskFlow lagi</h2></div><span className="card-icon"><CircleHelp size={18} /></span></div><p className="muted">Jalankan kembali tutorial visual tanpa mengubah data tugasmu.</p><button className="btn btn-secondary" type="button" onClick={onStartTutorial}><CircleHelp size={16} />Mulai tutorial lagi</button></article>
+    <article className="card settings-card"><div className="card-header"><div><p className="section-kicker">Bantuan</p><h2>Kenali TaskFlow lagi</h2></div><span className="card-icon"><CircleHelp size={16} /></span></div><p className="muted">Jalankan kembali tutorial visual tanpa mengubah data tugasmu.</p><button className="btn btn-secondary" type="button" onClick={onStartTutorial}><CircleHelp size={16} />Mulai tutorial lagi</button></article>
     <article className="card settings-card">
       <div className="card-header"><div><p className="section-kicker">Backup dan pemulihan</p><h2>Data tetap di perangkat ini</h2></div><span className="card-icon"><Download size={18} /></span></div>
       <p className="muted">Backup menyimpan tugas, mata kuliah, profil, XP, sesi fokus, dan preferensi dalam satu file JSON.</p>
@@ -133,9 +133,9 @@ export function SettingsPage({ data, commit, updatePreferences, onStartTutorial,
       )}
       {persisted === true && <p className="muted"><ShieldCheck size={14} /> Data sudah ditandai persisten oleh peramban ini.</p>}
     </article>
-    <article className="card danger-card"><div className="card-header"><div><p className="section-kicker danger-text">Perangkat bersama</p><h2>Mulai workspace baru</h2></div><span className="card-icon card-icon-danger"><Trash2 size={18} /></span></div><p className="muted">Hapus semua data lokal perangkat ini agar pengguna berikutnya dapat mengisi profil dan mengikuti tutorial dari awal.</p><button className="btn btn-danger" type="button" onClick={resetAll}><Trash2 size={16} />Mulai workspace baru</button></article>
+    <article className="card danger-card"><div className="card-header"><div><p className="section-kicker danger-text">Perangkat bersama</p><h2>Mulai workspace baru</h2></div><span className="card-icon card-icon-danger"><Trash2 size={16} /></span></div><p className="muted">Hapus semua data lokal perangkat ini agar pengguna berikutnya dapat mengisi profil dan mengikuti tutorial dari awal.</p><button className="btn btn-danger" type="button" onClick={resetAll}><Trash2 size={16} />Mulai workspace baru</button></article>
   </div>
   <SettingsAside profile={data.profile} progress={data.progress} streak={streak} />
-  <ConfirmDialog open={Boolean(confirm)} title={confirm?.title} message={confirm?.message} confirmLabel={confirm?.type === 'import' ? 'Pulihkan data' : 'Mulai baru'} danger={confirm?.type === 'reset'} onClose={() => setConfirm(null)} onConfirm={confirmAction} />
+  <ConfirmDialog open={Boolean(confirm)} title={confirm?.title} message={confirm?.message} confirmLabel={confirm?.type === 'reset' ? 'Mulai baru' : confirm?.type === 'snapshot' ? 'Pulihkan snapshot' : 'Pulihkan data'} danger={confirm?.type === 'reset'} onClose={() => setConfirm(null)} onConfirm={confirmAction} />
   </section>;
 }
