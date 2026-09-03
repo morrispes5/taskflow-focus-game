@@ -136,6 +136,6 @@ export function SettingsPage({ data, commit, updatePreferences, onStartTutorial,
     <article className="card danger-card"><div className="card-header"><div><p className="section-kicker danger-text">Perangkat bersama</p><h2>Mulai workspace baru</h2></div><span className="card-icon card-icon-danger"><Trash2 size={18} /></span></div><p className="muted">Hapus semua data lokal perangkat ini agar pengguna berikutnya dapat mengisi profil dan mengikuti tutorial dari awal.</p><button className="btn btn-danger" type="button" onClick={resetAll}><Trash2 size={16} />Mulai workspace baru</button></article>
   </div>
   <SettingsAside profile={data.profile} progress={data.progress} streak={streak} />
-  <ConfirmDialog open={Boolean(confirm)} title={confirm?.title} message={confirm?.message} confirmLabel={confirm?.type === 'import' ? 'Pulihkan data' : 'Mulai baru'} danger={confirm?.type === 'reset'} onClose={() => setConfirm(null)} onConfirm={confirmAction} />
+  <ConfirmDialog open={Boolean(confirm)} title={confirm?.title} message={confirm?.message} confirmLabel={confirm?.type === 'reset' ? 'Mulai baru' : confirm?.type === 'snapshot' ? 'Pulihkan snapshot' : 'Pulihkan data'} danger={confirm?.type === 'reset'} onClose={() => setConfirm(null)} onConfirm={confirmAction} />
   </section>;
 }

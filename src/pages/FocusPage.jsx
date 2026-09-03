@@ -286,12 +286,8 @@ export function FocusPage({ data, commit, toggleTask }) {
     toggleTask(task.id);
   };
 
-  useEffect(() => {
-    const sessionKey = focus?.sessionStartedAt;
-    if (!isFocusing || isReviewSession || !task || task.completed || liveSeconds < plannedSeconds || autoCompletedFocusRef.current === sessionKey) return;
-    autoCompletedFocusRef.current = sessionKey;
-    completeTaskAndStopFocus(true);
-  }, [isFocusing, isReviewSession, task?.id, task?.completed, liveSeconds, plannedSeconds, completeTaskAndStopFocus]);
+  // Timer mencapai target bukan berarti tugas selesai. Copy overtime
+  // di FocusTimer sudah: "Selesaikan sesi saat kamu siap." Jangan auto-complete.
 
   useEffect(() => {
     if (!focus || focus.status === 'break' || isReviewSession || !task?.completed) return;

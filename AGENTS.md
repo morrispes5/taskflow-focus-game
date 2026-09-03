@@ -130,6 +130,7 @@ Ditulis di sini supaya tidak terulang.
 - **Hook tidak boleh dipanggil di sisi kanan `||` atau `&&`.** Pernah terjadi pada `useReducedMotion` di FocusPage dan mematikan halaman fokus ketika preferensi motion berubah dari tab lain. ESLint `react-hooks/rules-of-hooks` sekarang menjaganya.
 - **`progress.currentStreak` hanya diperbarui saat ada aktivitas.** Untuk tampilan, selalu pakai `getDisplayStreak`, jangan membaca field-nya langsung.
 - **Id DOM statis di komponen yang dipakai berkali-kali.** `Modal` sempat memakai `id="dialog-title"` tetap padahal halaman Fokus memasang empat dialog sekaligus. Pakai `useId()`.
+- **Timer Focus Run mencapai target bukan berarti tugas selesai.** `liveSeconds >= plannedSeconds` pernah memanggil `completeTaskAndStopFocus(true)` dan menulis `completed` plus XP tanpa konfirmasi, padahal copy overtime bilang sesi diselesaikan saat pengguna siap. Jangan mengembalikan auto-complete itu.
 - **Verifikasi visual di panel pratinjau tidak dapat diandalkan.** Ketika panel tersembunyi, `requestAnimationFrame` berhenti total sehingga animasi keluar `AnimatePresence` tidak pernah selesai dan komponennya tampak beku di state lama. Itu artefak alat, bukan bug aplikasi. Verifikasi lewat DOM dan tes komponen, bukan screenshot.
 
 ## Keputusan yang sengaja tidak diambil
