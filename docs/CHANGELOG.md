@@ -45,6 +45,11 @@ Skema tetap **v8**. Seluruh perubahan additive dan tidak menyentuh data pengguna
 - **Tutup minggu.** Bagian di Analitik yang memisahkan yang selesai, yang lewat tanggalnya, yang masih menunggu, dan menit fokus minggu berjalan, dengan satu aksi membawa tugas yang meleset ke minggu depan pada hari yang sama. Terbuka sendiri di akhir pekan, di hari lain hanya satu tautan.
 - **Tangkap cepat global.** `Ctrl+K` membuka dialog tugas dari halaman mana pun, termasuk saat Focus Run berjalan. Dialognya dimuat lewat `React.lazy`.
 
+### Sengaja tidak dikerjakan
+
+- **Import mode gabung** dibatalkan. Ini satu-satunya jalur yang bila keliru dapat menghilangkan tugas atau menggandakan XP, sementara snapshot pemulihan sudah menutup skenario yang mendasarinya.
+- **Memecah `components.css`** dibatalkan. Kaskade CSS bergantung pada urutan impor sehingga risikonya regresi visual menyeluruh, sedangkan masalah keterbacaan yang mendasarinya sudah selesai lewat ekstraksi komponen.
+
 ## 5.2.3 - Storage security hardening
 
 - Migrasi `localStorage` legacy kini additive: data dipindahkan saat IndexedDB kosong dan key lama baru dibersihkan setelah transaksi sukses.

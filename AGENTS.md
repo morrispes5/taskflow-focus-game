@@ -132,6 +132,14 @@ Ditulis di sini supaya tidak terulang.
 - **Id DOM statis di komponen yang dipakai berkali-kali.** `Modal` sempat memakai `id="dialog-title"` tetap padahal halaman Fokus memasang empat dialog sekaligus. Pakai `useId()`.
 - **Verifikasi visual di panel pratinjau tidak dapat diandalkan.** Ketika panel tersembunyi, `requestAnimationFrame` berhenti total sehingga animasi keluar `AnimatePresence` tidak pernah selesai dan komponennya tampak beku di state lama. Itu artefak alat, bukan bug aplikasi. Verifikasi lewat DOM dan tes komponen, bukan screenshot.
 
+## Keputusan yang sengaja tidak diambil
+
+Dua hal berikut pernah direncanakan lalu **dibatalkan secara sadar**. Ini bukan pekerjaan tertinggal; jangan mengerjakannya ulang tanpa alasan baru.
+
+**Import mode gabung.** Rencananya menambah pilihan menggabungkan backup dengan workspace berjalan, di samping mode ganti yang ada sekarang. Dibatalkan karena ini satu-satunya jalur yang, bila keliru, benar-benar bisa merusak data pengguna: menghilangkan tugas atau menggandakan XP lewat `rewardedTaskIds`. Snapshot pemulihan sudah menutup skenario nyata yang mendasarinya, yaitu salah menekan reset atau import. Kalau suatu saat benar-benar dibutuhkan, tulis tesnya lebih dulu dan kerjakan hanya setelah snapshot terbukti berjalan di produksi.
+
+**Memecah `components.css` per area.** Rencananya memecah berkas 636 baris menjadi beberapa file yang diimpor berurutan. Dibatalkan karena kaskade CSS bergantung penuh pada urutan impor, sehingga risikonya adalah regresi visual di seluruh halaman, sementara masalah nyata yang mendasarinya — baris JSX raksasa yang tidak bisa direview — sudah selesai lewat ekstraksi komponen.
+
 ## Gaya UI
 
 Token di `base.css`. Dark mode: `html[data-theme="dark"]`. Preferensi `theme`: `light` | `dark` | `system`.
