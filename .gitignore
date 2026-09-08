@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.vite/
+.agents/
+*.log
+*.local
+.env
+.env.*
+!.env.example
+Thumbs.db
+.DS_Store

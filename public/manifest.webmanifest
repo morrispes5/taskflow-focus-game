@@ -1,0 +1,19 @@
+{
+  "name": "TaskFlow",
+  "short_name": "TaskFlow",
+  "description": "Ruang kerja fokus offline untuk pelajar dan mahasiswa.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f8f5",
+  "theme_color": "#2864f0",
+  "lang": "id",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

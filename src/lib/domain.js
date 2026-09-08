@@ -1,0 +1,1098 @@
+import { addDays, differenceInCalendarDays, endOfDay, format, isWithinInterval, nextSaturday, parseISO, startOfMonth, startOfWeek } from 'date-fns';
+import {
+  normalizeTask, normalizeMeeting, PRIORITY_LABELS, PROFILE_ROLE_LABELS, PROFILE_ROLES, MAX_PROFILE_GOAL_LENGTH, MAX_PROFILE_NAME_LENGTH,
+  MAX_COURSE_NAME, MAX_COURSES, MAX_NOTES_LENGTH, MAX_SUBTASKS, MAX_TASK_LENGTH, MAX_URL_LENGTH, MAX_MEETINGS, MAX_MEETING_TITLE, MAX_MEETING_NOTES,
+  STREAK_FREEZE_LIMIT, TASK_TYPES, TASK_TYPE_LABELS, COURSE_COLORS, WEEKDAY_LABELS,
+  isTimeString
+} from './storage.js';
+
+export const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
+
+export function todayString(date = new Date()) { return format(date, 'yyyy-MM-dd'); }
+
+export function parseDateString(value) { return parseISO(`${value}T00:00:00`); }
+
+export const MONTH_LABELS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+export function formatDate(value) {
+  if (!value) return '';
+  const date = parseDateString(value);
+  return `${date.getDate()} ${MONTH_LABELS_SHORT[date.getMonth()]}`;
+}
+
+export function formatDayDate(date) {
+  return `${WEEKDAY_LABELS[date.getDay()]}, ${date.getDate()} ${MONTH_LABELS_SHORT[date.getMonth()]}`;
+}
+
+export function formatTimer(seconds) {
+  const numeric = Number(seconds);
+  const safe = Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : 0;
+  return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
+}
+
+export function formatTime(value) {
+  return value && /^\d{2}:\d{2}$/.test(value) ? value : '';
+}
+
+// TODO(fase-4): parameter reference tidak dipakai; isOverdue mengira nilai ini berpengaruh.
+export function dueTimestamp(task, _reference = new Date()) {
+  if (!task.dueDate) return null;
+  const time = formatTime(task.dueTime) || '23:59';
+  return parseISO(`${task.dueDate}T${time}:00`).getTime() || parseDateString(task.dueDate).getTime();
+}
+
+export function isOverdue(task, reference = new Date()) {
+  if (task.completed || task.archived || !task.dueDate) return false;
+  const due = dueTimestamp(task, reference);
+  return due !== null && due < reference.getTime();
+}
+
+export function getDueInfo(task, reference = new Date()) {
+  if (!task.dueDate) return { label: 'Tanpa deadline', tone: 'muted' };
+  const today = todayString(reference);
+  const tomorrow = todayString(addDays(reference, 1));
+  const timeLabel = formatTime(task.dueTime) ? ` · ${task.dueTime}` : '';
+  if (!task.completed && isOverdue(task, reference)) return { label: `Terlambat · ${formatDate(task.dueDate)}${timeLabel}`, tone: 'danger' };
+  if (task.dueDate === today) return { label: task.completed ? `Deadline hari ini${timeLabel}` : `Hari ini${timeLabel}`, tone: 'focus' };
+  if (task.dueDate === tomorrow) return { label: `Besok${timeLabel}`, tone: 'muted' };
+  return { label: `${formatDate(task.dueDate)}${timeLabel}`, tone: 'muted' };
+}
+
+export function getCountdownLabel(task, reference = new Date()) {
+  if (!task.dueDate) return 'Tanpa deadline';
+  const due = dueTimestamp(task, reference);
+  const diffMs = due - reference.getTime();
+  if (diffMs < 0) return 'Sudah lewat';
+  const hours = Math.floor(diffMs / 3600000);
+  if (hours < 1) return 'Kurang dari 1 jam';
+  if (hours < 24) return `${hours} jam lagi`;
+  const days = Math.ceil(hours / 24);
+  return `${days} hari lagi`;
+}
+
+export function getSemesterWeek(dateKey, semester) {
+  if (!dateKey || !semester?.startDate) return null;
+  const date = parseDateString(dateKey);
+  const start = parseDateString(semester.startDate);
+  if (Number.isNaN(date.getTime()) || Number.isNaN(start.getTime())) return null;
+  const difference = differenceInCalendarDays(date, start);
+  return difference < 0 ? null : Math.floor(difference / 7) + 1;
+}
+
+export function getTaskXp(task) {
+  const typeBonus = task.type === 'ujian' ? 5 : task.type === 'kuis' || task.type === 'proyek' ? 2 : 0;
+  return 10 + (task.priority === 'high' ? 5 : task.priority === 'medium' ? 3 : 0) + typeBonus;
+}
+
+export const FOCUS_AUTO_PAUSE_AFTER_MS = 5 * 60 * 1000;
+export const FOCUS_REWARD_OVERTIME_RATIO = 1.5;
+
+export function getTaskFocusMinutes(task, fallbackMinutes = 25) {
+  const fallback = Math.min(180, Math.max(5, Number(fallbackMinutes) || 25));
+  const estimate = Number(task?.estimateMinutes);
+  return Number.isFinite(estimate) && estimate > 0 ? Math.min(180, Math.max(5, estimate)) : fallback;
+}
+
+export function getRewardableFocusSeconds(activeSeconds, plannedMinutes = null) {
+  const parsedSeconds = Number(activeSeconds);
+  const safeSeconds = Number.isFinite(parsedSeconds) ? Math.max(0, parsedSeconds) : 0;
+  const planned = Number(plannedMinutes);
+  if (!Number.isFinite(planned) || planned <= 0) return safeSeconds;
+  return Math.min(safeSeconds, planned * 60 * FOCUS_REWARD_OVERTIME_RATIO);
+}
+
+export function getSessionXp(activeSeconds, plannedMinutes = null) {
+  return Math.floor(getRewardableFocusSeconds(activeSeconds, plannedMinutes) / 600);
+}
+
+export function getLevel(totalXp) { return Math.floor(Math.max(0, totalXp) / 100) + 1; }
+
+export function getNextLevelXp(totalXp) { return getLevel(totalXp) * 100; }
+
+export function getWeekStart(reference = new Date()) { return startOfWeek(reference, { weekStartsOn: 1 }); }
+
+export function isCompletedThisWeek(task, reference = new Date()) {
+  return Boolean(task.completedAt && isWithinInterval(new Date(task.completedAt), { start: getWeekStart(reference), end: endOfDay(reference) }));
+}
+
+export function getCourseById(courses, courseId) {
+  return courses.find((course) => course.id === courseId) || null;
+}
+
+export function getTaskLabel(task, courses = []) {
+  const course = task.courseId ? getCourseById(courses, task.courseId) : null;
+  return course?.name || task.category || null;
+}
+
+export function getSubtaskProgress(task) {
+  const total = task.subtasks?.length || 0;
+  if (!total) return { total: 0, done: 0, ratio: 0 };
+  const done = task.subtasks.filter((item) => item.completed).length;
+  return { total, done, ratio: done / total };
+}
+
+function timestampOr(value, fallback = Date.now()) {
+  const timestamp = Number(value);
+  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : fallback;
+}
+
+export function getFocusActiveSeconds(focus, at = Date.now()) {
+  const activeSeconds = Math.max(0, Number(focus?.activeSeconds) || 0);
+  const runningSince = Number(focus?.runningSince);
+  if (focus?.status !== 'focusing' || focus?.runningSince === null || focus?.runningSince === undefined || !Number.isFinite(runningSince) || runningSince <= 0) return Math.floor(activeSeconds);
+  return Math.floor(activeSeconds + Math.max(0, (timestampOr(at) - runningSince) / 1000));
+}
+
+export function autoPauseFocus(focus, at = Date.now()) {
+  if (!focus || focus.status !== 'focusing') return focus;
+  const pausedAt = timestampOr(at);
+  return {
+    ...focus,
+    status: 'paused',
+    activeSeconds: getFocusActiveSeconds(focus, pausedAt),
+    runningSince: null
+  };
+}
+
+export function getFocusTimerState(focus, fallbackMinutes = 25, at = Date.now()) {
+  const fallback = Math.min(180, Math.max(5, Number(fallbackMinutes) || 25));
+  const planned = Number(focus?.plannedMinutes);
+  const plannedMinutes = Number.isFinite(planned) ? Math.min(180, Math.max(5, planned)) : fallback;
+  const plannedSeconds = plannedMinutes * 60;
+  const activeSeconds = getFocusActiveSeconds(focus, at);
+  const remainingSeconds = Math.max(0, plannedSeconds - activeSeconds);
+  const overtimeSeconds = Math.max(0, activeSeconds - plannedSeconds);
+  return {
+    activeSeconds,
+    plannedMinutes,
+    plannedSeconds,
+    remainingSeconds,
+    overtimeSeconds,
+    isOvertime: Boolean(focus && focus.status !== 'break' && activeSeconds >= plannedSeconds)
+  };
+}
+
+export function getFocusControlAvailability(focus) {
+  const status = focus?.status;
+  return {
+    canPause: status === 'focusing',
+    canMarkDistraction: status === 'focusing',
+    canFinish: status === 'focusing',
+    canResume: status === 'paused' || status === 'distracted',
+    canAbandon: status === 'paused' || status === 'distracted'
+  };
+}
+
+export function createActiveFocus(taskId, minutes, at = Date.now(), mode = 'focus') {
+  const startedAt = timestampOr(at);
+  const plannedMinutes = Math.min(180, Math.max(5, Number(minutes) || 25));
+  return {
+    taskId,
+    mode: mode === 'review' ? 'review' : 'focus',
+    plannedMinutes,
+    breakMinutes: plannedMinutes >= 50 ? 10 : 5,
+    status: 'focusing',
+    activeSeconds: 0,
+    runningSince: startedAt,
+    sessionStartedAt: startedAt,
+    breakEndsAt: null,
+    distractionStartedAt: null,
+    distractions: []
+  };
+}
+
+export function closeActiveFocusForReplacement(data, at = Date.now()) {
+  const focus = data?.activeFocus;
+  if (!focus) return data;
+  if (focus.status === 'break') return { ...data, activeFocus: null };
+  const endedAt = timestampOr(at);
+  const closedFocus = closeDistraction(focus, endedAt);
+  const activeSeconds = getFocusActiveSeconds(closedFocus, endedAt);
+  const distractionSeconds = getDistractionSummary(closedFocus, endedAt).totalSeconds;
+  const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+  return {
+    ...data,
+    sessions: [...sessions, {
+      id: endedAt,
+      taskId: closedFocus.taskId,
+      mode: closedFocus.mode === 'review' ? 'review' : 'focus',
+      plannedMinutes: closedFocus.plannedMinutes,
+      activeSeconds,
+      status: 'abandoned',
+      startedAt: closedFocus.sessionStartedAt,
+      endedAt,
+      rewardApplied: false,
+      note: '',
+      distractions: closedFocus.distractions,
+      distractionSeconds
+    }],
+    activeFocus: null
+  };
+}
+
+export function finishFocusRun(data, { at = Date.now(), completeTask = false, startBreak = !completeTask } = {}) {
+  const focus = data?.activeFocus;
+  if (!focus || focus.status === 'break') {
+    return { data, session: null, activeSeconds: 0, sessionXp: 0, taskCompleted: false, isReview: false };
+  }
+  const endedAt = timestampOr(at);
+  const closedFocus = closeDistraction(focus, endedAt);
+  const activeSeconds = getFocusActiveSeconds(closedFocus, endedAt);
+  const distractionSeconds = getDistractionSummary(closedFocus, endedAt).totalSeconds;
+  const isReview = closedFocus.mode === 'review';
+  let next = data;
+  let taskCompleted = false;
+
+  if (completeTask && !isReview) {
+    const currentTask = next.tasks?.find((task) => task.id === closedFocus.taskId);
+    if (currentTask && !currentTask.completed) {
+      next = applyTaskToggle(next, currentTask.id, endedAt).data;
+      taskCompleted = true;
+    }
+  }
+
+  const sessionXp = isReview ? 0 : getSessionXp(activeSeconds, closedFocus.plannedMinutes);
+  const session = {
+    id: endedAt,
+    taskId: closedFocus.taskId,
+    mode: isReview ? 'review' : 'focus',
+    plannedMinutes: closedFocus.plannedMinutes,
+    activeSeconds,
+    status: 'completed',
+    startedAt: closedFocus.sessionStartedAt,
+    endedAt,
+    rewardApplied: !isReview,
+    note: '',
+    distractions: closedFocus.distractions,
+    distractionSeconds
+  };
+  const dateKey = todayString(new Date(endedAt));
+  const progress = isReview ? next.progress : applySessionReward(next.progress, activeSeconds, closedFocus.plannedMinutes, dateKey);
+  return {
+    data: {
+      ...next,
+      progress,
+      sessions: [...(Array.isArray(next.sessions) ? next.sessions : []), session],
+      activeFocus: {
+        ...closedFocus,
+        status: 'break',
+        activeSeconds,
+        runningSince: null,
+        breakEndsAt: startBreak ? endedAt + closedFocus.breakMinutes * 60000 : null,
+        sessionId: endedAt
+      }
+    },
+    session,
+    activeSeconds,
+    sessionXp,
+    taskCompleted,
+    isReview
+  };
+}
+
+export function replaceActiveFocus(data, taskId, minutes, at = Date.now(), mode = 'focus') {
+  const startedAt = timestampOr(at);
+  const cleared = closeActiveFocusForReplacement(data, startedAt);
+  return { ...cleared, activeFocus: createActiveFocus(taskId, minutes, startedAt, mode) };
+}
+
+export function beginDistraction(focus, at = Date.now()) {
+  if (!focus || focus.status !== 'focusing') return focus;
+  const startedAt = timestampOr(at);
+  const distractions = Array.isArray(focus.distractions) ? focus.distractions : [];
+  return {
+    ...focus,
+    status: 'distracted',
+    activeSeconds: getFocusActiveSeconds(focus, startedAt),
+    runningSince: null,
+    distractionStartedAt: startedAt,
+    distractions: [...distractions, { id: startedAt, startedAt, endedAt: null, durationSeconds: 0 }]
+  };
+}
+
+export function closeDistraction(focus, at = Date.now()) {
+  if (!focus || focus.status !== 'distracted') return focus;
+  const endedAt = timestampOr(at);
+  const distractions = Array.isArray(focus.distractions) ? [...focus.distractions] : [];
+  let openIndex = -1;
+  for (let index = distractions.length - 1; index >= 0; index -= 1) {
+    if (distractions[index].endedAt === null) {
+      openIndex = index;
+      break;
+    }
+  }
+  const startedAt = timestampOr(focus.distractionStartedAt, openIndex >= 0 ? distractions[openIndex].startedAt : endedAt);
+  const durationSeconds = Math.max(0, Math.floor((endedAt - startedAt) / 1000));
+  if (openIndex >= 0) {
+    distractions[openIndex] = { ...distractions[openIndex], endedAt, durationSeconds };
+  } else {
+    distractions.push({ id: startedAt, startedAt, endedAt, durationSeconds });
+  }
+  return { ...focus, distractionStartedAt: null, distractions };
+}
+
+export function resumeDistraction(focus, at = Date.now()) {
+  if (!focus || focus.status !== 'distracted') return focus;
+  const runningSince = timestampOr(at);
+  return { ...closeDistraction(focus, runningSince), status: 'focusing', runningSince };
+}
+
+export function getDistractionSummary(focus, at = Date.now()) {
+  const distractions = Array.isArray(focus?.distractions) ? focus.distractions : [];
+  const totalSeconds = distractions.reduce((sum, item) => {
+    const stored = Math.max(0, Number(item.durationSeconds) || 0);
+    if (item.endedAt !== null && item.endedAt !== undefined) return sum + stored;
+    const startedAt = timestampOr(item.startedAt, timestampOr(focus?.distractionStartedAt, timestampOr(at)));
+    return sum + Math.max(stored, Math.floor((timestampOr(at) - startedAt) / 1000));
+  }, 0);
+  return { count: distractions.length, totalSeconds };
+}
+
+export function visibleTasks(tasks, { includeArchived = false } = {}) {
+  return includeArchived ? tasks : tasks.filter((task) => !task.archived);
+}
+
+function isCompletedFocusSession(session) {
+  return session?.status === 'completed' && session?.mode !== 'review';
+}
+
+export function sortTasks(tasks, mode = 'newest') {
+  return [...tasks].sort((a, b) => {
+    if (a.pinned !== b.pinned) return Number(b.pinned) - Number(a.pinned);
+    if (mode === 'dueSoon') {
+      const aDue = dueTimestamp(a) ?? Number.MAX_SAFE_INTEGER;
+      const bDue = dueTimestamp(b) ?? Number.MAX_SAFE_INTEGER;
+      return aDue - bDue || Number(b.completed) - Number(a.completed) || b.createdAt - a.createdAt;
+    }
+    if (mode === 'priority') return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] || b.createdAt - a.createdAt;
+    return b.createdAt - a.createdAt;
+  });
+}
+
+export function filterTasks(tasks, { status = 'all', priority = 'all', category = 'all', search = '', courseId = 'all', type = 'all', archived = 'active' } = {}) {
+  const query = search.trim().toLowerCase();
+  return tasks.filter((task) => {
+    const archiveMatch = archived === 'all' || (archived === 'archived' ? task.archived : !task.archived);
+    const statusMatch = status === 'all' || (status === 'active' ? !task.completed : task.completed);
+    const priorityMatch = priority === 'all' || task.priority === priority;
+    const categoryMatch = category === 'all' || (task.category || 'Tanpa kategori') === category;
+    const courseMatch = courseId === 'all' || (courseId === 'none' ? !task.courseId : task.courseId === Number(courseId));
+    const typeMatch = type === 'all' || task.type === type;
+    const searchMatch = !query || `${task.text} ${task.category || ''} ${task.notes || ''}`.toLowerCase().includes(query);
+    return archiveMatch && statusMatch && priorityMatch && categoryMatch && courseMatch && typeMatch && searchMatch;
+  });
+}
+
+export function selectDailyMission(tasks, reference = new Date()) {
+  const active = tasks.filter((task) => !task.completed && !task.archived);
+  return [...active].sort((a, b) => {
+    const rank = (task) => {
+      if (task.pinned) return -1;
+      if (isOverdue(task, reference)) return 0;
+      if (task.dueDate === todayString(reference)) return 1;
+      if (task.dueDate) return 2;
+      if (task.priority === 'high') return 3;
+      return 4;
+    };
+    const rankDifference = rank(a) - rank(b);
+    if (rankDifference) return rankDifference;
+    if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+    return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] || b.createdAt - a.createdAt;
+  })[0] || null;
+}
+
+export function selectReviewTask(tasks) {
+  const completed = visibleTasks(tasks).filter((task) => task.completed);
+  return [...completed].sort((a, b) => {
+    const completedAtA = Number(a.completedAt || a.updatedAt || a.createdAt || 0);
+    const completedAtB = Number(b.completedAt || b.updatedAt || b.createdAt || 0);
+    return completedAtB - completedAtA;
+  })[0] || null;
+}
+
+export function getDashboardStats(tasks, progress, sessions, reference = new Date()) {
+  const live = visibleTasks(tasks);
+  const active = live.filter((task) => !task.completed);
+  const completed = live.filter((task) => task.completed);
+  const today = todayString(reference);
+  const displayStreak = getDisplayStreak(progress, today);
+  return {
+    total: live.length,
+    active: active.length,
+    dueToday: active.filter((task) => task.dueDate === today).length,
+    overdue: active.filter((task) => isOverdue(task, reference)).length,
+    completedWeek: completed.filter((task) => isCompletedThisWeek(task, reference)).length,
+    focusMinutes: Math.floor(sessions.filter(isCompletedFocusSession).reduce((sum, session) => sum + session.activeSeconds, 0) / 60),
+    xp: progress.totalXp,
+    level: progress.level,
+    streak: displayStreak.value,
+    streakBroken: displayStreak.broken,
+    bestStreak: displayStreak.bestStreak
+  };
+}
+
+export function getUpcomingDeadlines(tasks, _reference = new Date(), limit = 3) {
+  return sortTasks(
+    visibleTasks(tasks).filter((task) => !task.completed && task.dueDate),
+    'dueSoon'
+  ).slice(0, limit);
+}
+
+export function getTodayAgenda(tasks, courses = [], reference = new Date()) {
+  const dateKey = todayString(reference);
+  const weekday = reference.getDay();
+  const classes = courses.flatMap((course) => course.schedule.filter((slot) => slot.day === weekday).map((slot) => ({
+    kind: 'class',
+    id: `${course.id}-${slot.start}`,
+    title: course.name,
+    time: `${slot.start}–${slot.end}`,
+    room: slot.room,
+    color: course.color
+  })));
+  const due = visibleTasks(tasks).filter((task) => !task.completed && task.dueDate === dateKey).map((task) => ({
+    kind: 'task',
+    id: task.id,
+    title: task.text,
+    time: formatTime(task.dueTime) || 'Deadline',
+    type: task.type,
+    task
+  }));
+  const overdue = visibleTasks(tasks).filter((task) => isOverdue(task, reference) && task.dueDate !== dateKey).map((task) => ({
+    kind: 'overdue',
+    id: task.id,
+    title: task.text,
+    time: getDueInfo(task, reference).label,
+    type: task.type,
+    task
+  }));
+  return { dateKey, classes, due, overdue };
+}
+
+export function getCalendarDays(reference = new Date()) {
+  const monthStart = startOfMonth(reference);
+  const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = addDays(gridStart, index);
+    return {
+      date,
+      key: todayString(date),
+      inMonth: date.getMonth() === reference.getMonth(),
+      isToday: todayString(date) === todayString(reference)
+    };
+  });
+}
+
+export function getCalendarMarks(tasks, courses, dayKey) {
+  const live = visibleTasks(tasks);
+  const weekday = parseDateString(dayKey).getDay();
+  const deadlineCount = live.filter((task) => task.dueDate === dayKey).length;
+  const examCount = live.filter((task) => task.dueDate === dayKey && (task.type === 'ujian' || task.type === 'kuis')).length;
+  const classCount = courses.reduce((sum, course) => sum + course.schedule.filter((slot) => slot.day === weekday).length, 0);
+  return { deadlineCount, examCount, classCount };
+}
+
+export function getAgendaForDay(tasks, courses, dayKey) {
+  const weekday = parseDateString(dayKey).getDay();
+  const classes = courses.flatMap((course) => course.schedule.filter((slot) => slot.day === weekday).map((slot) => ({
+    kind: 'class',
+    sort: slot.start,
+    title: course.name,
+    meta: `${slot.start}–${slot.end}${slot.room ? ` · ${slot.room}` : ''}`,
+    color: course.color,
+    course
+  })));
+  const deadlines = visibleTasks(tasks).filter((task) => task.dueDate === dayKey).map((task) => ({
+    kind: 'task',
+    sort: formatTime(task.dueTime) || '99:99',
+    title: task.text,
+    meta: `${TASK_TYPE_LABELS[task.type] || 'Tugas'}${task.dueTime ? ` · ${task.dueTime}` : ''}`,
+    task,
+    course: courses.find((course) => course.id === task.courseId) || null,
+    completed: task.completed
+  }));
+  return [...classes, ...deadlines].sort((a, b) => a.sort.localeCompare(b.sort));
+}
+
+export function getCourseProgress(courses, tasks) {
+  return courses.map((course) => {
+    const related = visibleTasks(tasks).filter((task) => task.courseId === course.id);
+    const completed = related.filter((task) => task.completed).length;
+    return { course, total: related.length, completed, active: related.length - completed };
+  });
+}
+
+export function hasSemesterRange(semester) {
+  return Boolean(semester && (semester.startDate || semester.endDate));
+}
+
+export function isDateInSemester(dateKey, semester) {
+  if (!hasSemesterRange(semester)) return true;
+  if (!dateKey) return false;
+  if (semester.startDate && dateKey < semester.startDate) return false;
+  if (semester.endDate && dateKey > semester.endDate) return false;
+  return true;
+}
+
+// Number(null) bernilai 0 dan lolos Number.isFinite, sehingga completedAt yang
+// null sebelumnya menghasilkan '1970-01-01'. Akibatnya taskInSemester tidak
+// pernah jatuh ke createdAt, dan setiap tugas tanpa deadline yang belum selesai
+// dianggap di luar rentang semester lalu hilang dari Analitik.
+export function dateKeyFromTimestamp(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+  return todayString(new Date(timestamp));
+}
+
+export function taskInSemester(task, semester) {
+  const dateKey = task.dueDate || dateKeyFromTimestamp(task.completedAt) || dateKeyFromTimestamp(task.createdAt);
+  return isDateInSemester(dateKey, semester);
+}
+
+export function sessionInSemester(session, semester) {
+  return isDateInSemester(dateKeyFromTimestamp(session.endedAt || session.startedAt), semester);
+}
+
+export function validateSemesterInput(input) {
+  const source = input && typeof input === 'object' ? input : {};
+  const startDate = source.startDate || '';
+  const endDate = source.endDate || '';
+  if (startDate && !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return { field: 'startDate', message: 'Tanggal mulai tidak valid.' };
+  if (endDate && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return { field: 'endDate', message: 'Tanggal selesai tidak valid.' };
+  if (startDate && endDate && endDate < startDate) return { field: 'endDate', message: 'Tanggal selesai tidak boleh sebelum tanggal mulai.' };
+  return null;
+}
+
+export function getAnalytics(tasks, sessions, courses = [], reference = new Date(), { semester = null, scope = 'all' } = {}) {
+  const useSemester = scope === 'semester' && hasSemesterRange(semester);
+  const scopedTasks = useSemester ? tasks.filter((task) => taskInSemester(task, semester)) : tasks;
+  const scopedSessions = useSemester ? sessions.filter((session) => sessionInSemester(session, semester)) : sessions;
+  const live = visibleTasks(scopedTasks);
+  const completed = live.filter((task) => task.completed);
+  const withDeadline = completed.filter((task) => task.dueDate && task.completedAt);
+  const onTime = withDeadline.filter((task) => task.completedAt <= (dueTimestamp({ ...task, dueTime: task.dueTime || '23:59' }) ?? endOfDay(parseDateString(task.dueDate)).getTime()));
+  const categoryMap = new Map();
+  live.forEach((task) => { const key = getTaskLabel(task, courses) || 'Tanpa kategori'; categoryMap.set(key, (categoryMap.get(key) || 0) + 1); });
+  const priority = ['high', 'medium', 'low'].map((key) => ({ label: PRIORITY_LABELS[key], key, count: live.filter((task) => task.priority === key).length })).filter((item) => item.count);
+  const types = TASK_TYPES.map((key) => ({ label: TASK_TYPE_LABELS[key], key, count: live.filter((task) => task.type === key).length })).filter((item) => item.count);
+  const completedFocusSessions = scopedSessions.filter(isCompletedFocusSession);
+  const focusMinutes = Math.floor(completedFocusSessions.reduce((sum, session) => sum + session.activeSeconds, 0) / 60);
+  const distractions = completedFocusSessions.reduce((sum, session) => sum + (Number(session.distractions?.length) || 0), 0);
+  const distractionMinutes = Math.floor(completedFocusSessions.reduce((sum, session) => sum + (Number(session.distractionSeconds) || 0), 0) / 60);
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = addDays(startOfWeek(reference, { weekStartsOn: 1 }), index);
+    const key = todayString(date);
+    return { key, label: format(date, 'EEE'), completed: completed.filter((task) => task.completedAt && todayString(new Date(task.completedAt)) === key).length, focus: Math.floor(completedFocusSessions.filter((session) => session.endedAt && todayString(new Date(session.endedAt)) === key).reduce((sum, session) => sum + session.activeSeconds, 0) / 60) };
+  });
+  return {
+    scope: useSemester ? 'semester' : 'all',
+    completionRate: live.length ? Math.round((completed.length / live.length) * 100) : 0,
+    completed: completed.length,
+    active: live.length - completed.length,
+    overdue: live.filter((task) => isOverdue(task, reference)).length,
+    onTimeRate: withDeadline.length ? Math.round((onTime.length / withDeadline.length) * 100) : 0,
+    onTimeCount: onTime.length,
+    withDeadline: live.filter((task) => task.dueDate).length,
+    focusMinutes,
+    sessionsCompleted: completedFocusSessions.length,
+    distractions,
+    distractionMinutes,
+    category: [...categoryMap.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count })),
+    courses: getCourseProgress(courses, live).filter((item) => item.total).map((item) => ({ label: item.course.name, count: item.total, completed: item.completed })),
+    types,
+    priority,
+    days
+  };
+}
+
+export const SNOOZE_TARGETS = ['tomorrow', 'weekend'];
+export const SNOOZE_LABELS = { tomorrow: 'Tunda ke besok', weekend: 'Tunda ke akhir pekan' };
+
+// Tugas yang terlambat hanya menumpuk dan membuat daftar terasa menghakimi.
+// Menunda cukup menggeser dueDate; status, XP, dan riwayat tidak disentuh.
+export function getSnoozeDate(target, reference = new Date()) {
+  if (target === 'weekend') return todayString(nextSaturday(reference));
+  return todayString(addDays(reference, 1));
+}
+
+export function applySnooze(data, taskId, target, now = Date.now()) {
+  if (!SNOOZE_TARGETS.includes(target)) return data;
+  const dueDate = getSnoozeDate(target, new Date(now));
+  return {
+    ...data,
+    tasks: data.tasks.map((task) => task.id !== taskId ? task : { ...task, dueDate, updatedAt: now })
+  };
+}
+
+// Tutup minggu: membaca ritme satu minggu, bukan menilai. Yang meleset adalah
+// tugas aktif yang tanggalnya sudah lewat di dalam minggu berjalan, jadi tugas
+// yang jatuh tempo hari ini belum dihitung meleset.
+export function getWeekReview(tasks, sessions = [], reference = new Date()) {
+  const start = getWeekStart(reference);
+  const end = endOfDay(addDays(start, 6));
+  const startKey = todayString(start);
+  const endKey = todayString(addDays(start, 6));
+  const todayKey = todayString(reference);
+  const live = visibleTasks(tasks);
+  const inWeek = (dateKey) => Boolean(dateKey) && dateKey >= startKey && dateKey <= endKey;
+
+  const completed = live.filter((task) => task.completedAt && isWithinInterval(new Date(task.completedAt), { start, end }));
+  const slipped = live.filter((task) => !task.completed && inWeek(task.dueDate) && task.dueDate < todayKey);
+  const upcoming = live.filter((task) => !task.completed && inWeek(task.dueDate) && task.dueDate >= todayKey);
+  const weekSessions = (Array.isArray(sessions) ? sessions : []).filter((session) => {
+    const dateKey = dateKeyFromTimestamp(session.endedAt || session.startedAt);
+    return isCompletedFocusSession(session) && inWeek(dateKey);
+  });
+
+  return {
+    startKey,
+    endKey,
+    label: `${formatDate(startKey)} – ${formatDate(endKey)}`,
+    completed,
+    slipped,
+    upcoming,
+    focusMinutes: Math.floor(weekSessions.reduce((sum, session) => sum + session.activeSeconds, 0) / 60),
+    sessionsCompleted: weekSessions.length
+  };
+}
+
+// Membawa tugas yang meleset ke minggu depan mempertahankan hari yang sama,
+// supaya ritme mingguan pengguna tidak berubah diam-diam.
+export function applyWeekCarryOver(data, taskIds, now = Date.now()) {
+  const ids = new Set(taskIds);
+  if (!ids.size) return data;
+  return {
+    ...data,
+    tasks: data.tasks.map((task) => (!ids.has(task.id) || !task.dueDate)
+      ? task
+      : { ...task, dueDate: todayString(addDays(parseDateString(task.dueDate), 7)), updatedAt: now })
+  };
+}
+
+export function validateTaskInput(input) {
+  const text = String(input.text ?? '').trim();
+  const category = String(input.category ?? '').trim();
+  const notes = String(input.notes ?? '');
+  if (!text) return { field: 'text', message: 'Judul tugas wajib diisi.' };
+  if (text.length > MAX_TASK_LENGTH) return { field: 'text', message: `Judul tugas maksimal ${MAX_TASK_LENGTH} karakter.` };
+  if (category.length > 32) return { field: 'category', message: 'Kategori maksimal 32 karakter.' };
+  if (input.dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate)) return { field: 'dueDate', message: 'Tanggal deadline tidak valid.' };
+  if (input.dueTime && !isTimeString(input.dueTime)) return { field: 'dueTime', message: 'Jam deadline tidak valid.' };
+  if (notes.length > MAX_NOTES_LENGTH) return { field: 'notes', message: 'Catatan terlalu panjang.' };
+  if (input.url && String(input.url).trim() && !/^https?:\/\//i.test(String(input.url).trim())) return { field: 'url', message: 'Tautan harus diawali http:// atau https://.' };
+  if (Array.isArray(input.subtasks) && input.subtasks.length > MAX_SUBTASKS) return { field: 'subtasks', message: `Subtask maksimal ${MAX_SUBTASKS}.` };
+  return null;
+}
+
+export function validateCourseInput(input, existing = []) {
+  const name = String(input.name ?? '').trim();
+  if (!name) return { field: 'name', message: 'Nama mata kuliah wajib diisi.' };
+  if (name.length > MAX_COURSE_NAME) return { field: 'name', message: `Nama maksimal ${MAX_COURSE_NAME} karakter.` };
+  const driveUrl = String(input.driveUrl ?? '').trim();
+  if (driveUrl.length > MAX_URL_LENGTH) return { field: 'driveUrl', message: `Tautan folder maksimal ${MAX_URL_LENGTH} karakter.` };
+  if (driveUrl && !/^https?:\/\//i.test(driveUrl)) return { field: 'driveUrl', message: 'Tautan folder harus diawali http:// atau https://.' };
+  if (existing.length >= MAX_COURSES && !input.id) return { field: 'name', message: `Mata kuliah maksimal ${MAX_COURSES}.` };
+  if (existing.some((course) => course.id !== input.id && course.name.toLowerCase() === name.toLowerCase())) return { field: 'name', message: 'Nama mata kuliah sudah ada.' };
+  return null;
+}
+
+export function validateProfileInput(input) {
+  const name = String(input.name ?? '').trim();
+  const role = String(input.role ?? '').trim();
+  const goal = String(input.goal ?? '').trim();
+  if (!name) return { field: 'name', message: 'Nama panggilan wajib diisi.' };
+  if (name.length > MAX_PROFILE_NAME_LENGTH) return { field: 'name', message: `Nama panggilan maksimal ${MAX_PROFILE_NAME_LENGTH} karakter.` };
+  if (!PROFILE_ROLES.includes(role)) return { field: 'role', message: 'Pilih peranmu agar rekomendasi lebih relevan.' };
+  if (!goal) return { field: 'goal', message: 'Tuliskan tujuan utama yang ingin kamu capai.' };
+  if (goal.length > MAX_PROFILE_GOAL_LENGTH) return { field: 'goal', message: `Tujuan utama maksimal ${MAX_PROFILE_GOAL_LENGTH} karakter.` };
+  return null;
+}
+
+const RECOMMENDATION_RULES = [
+  { pattern: /ujian|belajar|kuliah|materi|semester/, category: 'Belajar', items: ['Tulis tiga topik yang paling penting untuk dipahami', 'Pilih satu materi untuk dipelajari lebih dulu', 'Buat rangkuman singkat dari sesi belajarmu', 'Uji pemahaman dengan lima pertanyaan'] },
+  { pattern: /proyek|project|aplikasi|website|produk|coding|kode/, category: 'Proyek', items: ['Tulis hasil akhir proyek dalam satu kalimat', 'Pecah proyek menjadi milestone pertama', 'Buat daftar langkah teknis yang paling kecil', 'Jalankan satu sesi fokus untuk milestone pertama'] },
+  { pattern: /presentasi|makalah|laporan|tulisan|proposal/, category: 'Pekerjaan', items: ['Tentukan pesan utama yang ingin disampaikan', 'Buat kerangka isi dalam tiga bagian', 'Kumpulkan bahan yang paling penting', 'Tulis draf pertama tanpa mengedit berlebihan'] },
+  { pattern: /rutinitas|kebiasaan|olahraga|kesehatan|pribadi/, category: 'Pribadi', items: ['Tentukan perubahan kecil yang ingin dimulai', 'Pilih waktu paling realistis untuk melakukannya', 'Siapkan lingkungan agar langkah pertama mudah', 'Catat hasil pertama setelah selesai'] }
+];
+
+const GENERAL_RECOMMENDATIONS = [
+  'Tulis hasil akhir yang ingin kamu capai',
+  'Pecah tujuanmu menjadi langkah pertama yang kecil',
+  'Pilih satu hal yang bisa selesai hari ini',
+  'Jalankan satu sesi fokus untuk mulai bergerak'
+];
+
+export function getProfileRecommendations(profile) {
+  const goal = String(profile?.goal ?? '').trim().toLowerCase();
+  const role = PROFILE_ROLES.includes(profile?.role) ? profile.role : '';
+  if (!goal || !role) return [];
+  const rule = RECOMMENDATION_RULES.find((candidate) => candidate.pattern.test(goal));
+  const category = rule?.category || PROFILE_ROLE_LABELS[role];
+  const items = rule?.items || GENERAL_RECOMMENDATIONS;
+  return items.slice(0, 5).map((text, index) => ({
+    id: `${category.toLowerCase().replace(/\s+/g, '-')}-${index + 1}`,
+    text,
+    category,
+    priority: 'medium',
+    estimateMinutes: 25,
+    type: rule?.category === 'Belajar' ? 'bacaan' : rule?.category === 'Proyek' ? 'proyek' : 'tugas'
+  }));
+}
+
+export function makeTask(input, id = Date.now()) {
+  const now = Date.now();
+  const subtasks = Array.isArray(input.subtasks)
+    ? input.subtasks.map((item, index) => ({ id: now + index + 1, text: String(item.text ?? item).trim(), completed: Boolean(item.completed) })).filter((item) => item.text)
+    : [];
+  return normalizeTask({
+    id,
+    text: input.text,
+    completed: false,
+    createdAt: now,
+    updatedAt: now,
+    completedAt: null,
+    dueDate: input.dueDate || null,
+    dueTime: input.dueTime || null,
+    priority: input.priority || 'medium',
+    category: input.category || null,
+    estimateMinutes: input.estimateMinutes || 25,
+    courseId: input.courseId || null,
+    meetingNumber: input.meetingNumber || null,
+    type: input.type || 'pribadi',
+    notes: input.notes || '',
+    subtasks,
+    url: input.url || null,
+    pinned: Boolean(input.pinned),
+    archived: false,
+    recurrence: input.recurrence || 'none',
+    reminderOffsetHours: input.reminderOffsetHours ?? null
+  });
+}
+
+export function makeCourse(input, id = Date.now()) {
+  const meetings = Array.isArray(input.meetings)
+    ? input.meetings.map(normalizeMeeting).filter(Boolean).slice(0, MAX_MEETINGS)
+    : [];
+  return {
+    id,
+    name: String(input.name ?? '').trim(),
+    code: String(input.code ?? '').trim(),
+    color: COURSE_COLORS.includes(input.color) ? input.color : COURSE_COLORS[0],
+    lecturer: String(input.lecturer ?? '').trim(),
+    sks: Number(input.sks) || null,
+    schedule: Array.isArray(input.schedule) ? input.schedule : [],
+    meetings,
+    driveUrl: String(input.driveUrl ?? '').trim() || null
+  };
+}
+
+export function validateMeetingInput(input, existing = []) {
+  const number = Number(input.number);
+  if (!Number.isInteger(number) || number < 1 || number > MAX_MEETINGS) {
+    return { field: 'number', message: `Nomor harus antara 1 dan ${MAX_MEETINGS}.` };
+  }
+  const title = String(input.title ?? '').trim();
+  if (title.length > MAX_MEETING_TITLE) {
+    return { field: 'title', message: `Judul materi maksimal ${MAX_MEETING_TITLE} karakter.` };
+  }
+  const driveUrl = String(input.driveUrl ?? '').trim();
+  if (driveUrl.length > MAX_URL_LENGTH) {
+    return { field: 'driveUrl', message: `Tautan materi maksimal ${MAX_URL_LENGTH} karakter.` };
+  }
+  if (driveUrl && !/^https?:\/\//i.test(driveUrl)) {
+    return { field: 'driveUrl', message: 'Tautan materi harus diawali http:// atau https://.' };
+  }
+  const notes = String(input.notes ?? '').trim();
+  if (notes.length > MAX_MEETING_NOTES) {
+    return { field: 'notes', message: `Catatan materi maksimal ${MAX_MEETING_NOTES} karakter.` };
+  }
+  if (existing.some((meeting) => meeting.id !== input.id && meeting.number === number)) {
+    return { field: 'number', message: `Pertemuan/Milestone ke-${number} sudah ada.` };
+  }
+  return null;
+}
+
+export function generateDefaultMeetings(_courseName = '', role = 'mahasiswa') {
+  const isProfessional = role === 'profesional' || role === 'lainnya';
+  if (isProfessional) {
+    return [
+      { id: Date.now() + 1, number: 1, title: 'Tahap 1: Riset & Perencanaan', driveUrl: null, completed: false, notes: '' },
+      { id: Date.now() + 2, number: 2, title: 'Tahap 2: Implementasi Awal', driveUrl: null, completed: false, notes: '' },
+      { id: Date.now() + 3, number: 3, title: 'Tahap 3: Review & Pengujian', driveUrl: null, completed: false, notes: '' },
+      { id: Date.now() + 4, number: 4, title: 'Tahap 4: Peluncuran & Evaluasi Akhir', driveUrl: null, completed: false, notes: '' }
+    ];
+  }
+
+  const list = [];
+  const baseTime = Date.now();
+  for (let i = 1; i <= 16; i++) {
+    let title = `Pertemuan ${i}: Topik Materi`;
+    if (i === 1) title = 'Pertemuan 1: Pengantar & Silabus';
+    else if (i === 8) title = 'Pertemuan 8: UTS (Ujian Tengah Semester)';
+    else if (i === 16) title = 'Pertemuan 16: UAS (Ujian Akhir Semester)';
+
+    list.push({
+      id: baseTime + i,
+      number: i,
+      title,
+      driveUrl: null,
+      completed: false,
+      notes: ''
+    });
+  }
+  return list;
+}
+
+export function getSemesterSksSummary(courses = []) {
+  const safeCourses = Array.isArray(courses) ? courses : [];
+  const totalSks = safeCourses.reduce((sum, course) => sum + (Number(course.sks) || 0), 0);
+  const courseCountWithSks = safeCourses.filter((course) => Number(course.sks) > 0).length;
+  return {
+    totalSks,
+    courseCountWithSks,
+    totalCourses: safeCourses.length
+  };
+}
+
+export function getCourseMeetingsProgress(course) {
+  const meetings = Array.isArray(course?.meetings) ? course.meetings : [];
+  const totalMeetings = meetings.length;
+  const completedMeetings = meetings.filter((m) => Boolean(m.completed)).length;
+  const percentage = totalMeetings > 0 ? Math.round((completedMeetings / totalMeetings) * 100) : 0;
+  return {
+    totalMeetings,
+    completedMeetings,
+    percentage
+  };
+}
+
+export function getRoleTerminology(role = 'mahasiswa') {
+  const isAcademic = role === 'mahasiswa' || role === 'pelajar';
+  return {
+    role,
+    isAcademic,
+    courseLabel: isAcademic ? 'Mata Kuliah' : 'Proyek / Area',
+    courseListLabel: isAcademic ? 'Mata kuliah' : 'Proyek',
+    meetingLabel: isAcademic ? 'Pertemuan' : 'Milestone',
+    meetingsHeading: isAcademic ? 'Pertemuan & Materi Kuliah' : 'Milestone & Dokumen Proyek',
+    generateButtonLabel: isAcademic ? 'Buat 16 Pertemuan Otomatis' : 'Buat 4 Milestone Proyek',
+    driveHint: isAcademic ? 'Folder Google Drive / materi' : 'Folder Google Drive / dokumen proyek',
+    sksLabel: isAcademic ? 'SKS' : 'Bobot',
+    sksSummaryLabel: isAcademic ? 'Beban SKS Semester' : 'Total Bobot Proyek'
+  };
+}
+
+// UTS dan UAS hanya masuk akal untuk peran akademik. Sebelumnya aturan ini
+// diketik ulang di lima tempat dan tiga di antaranya lupa memeriksa peran,
+// sehingga pengguna Profesional pun melihat milestone-nya diberi label UTS.
+// Number(null) bernilai 0 dan lolos isFinite, jadi nilai kosong harus ditolak
+// lebih dulu supaya tugas tanpa nomor pertemuan tidak diberi label "P0".
+function toMeetingNumber(number) {
+  if (number === null || number === undefined || number === '') return null;
+  const parsed = Number(number);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function examLabel(number, terms) {
+  if (!terms?.isAcademic) return null;
+  if (number === 8) return 'UTS';
+  if (number === 16) return 'UAS';
+  return null;
+}
+
+export function getMeetingBadge(number, terms) {
+  const parsed = toMeetingNumber(number);
+  if (parsed === null) return '';
+  return examLabel(parsed, terms) || `P${parsed}`;
+}
+
+export function getMeetingLabel(number, terms) {
+  const parsed = toMeetingNumber(number);
+  if (parsed === null) return '';
+  return examLabel(parsed, terms) || `${terms?.meetingLabel || 'Pertemuan'} ${parsed}`;
+}
+
+// Satu tempat menulis perubahan tugas, dipakai Beranda maupun Quest Board.
+export function applyTaskSave(data, input, id = null, now = Date.now()) {
+  if (!id) return { ...data, tasks: [makeTask(input), ...data.tasks] };
+  return {
+    ...data,
+    tasks: data.tasks.map((task) => task.id !== id ? task : {
+      ...task,
+      ...input,
+      text: String(input.text ?? task.text).trim(),
+      category: input.category?.trim() || null,
+      dueDate: input.dueDate || null,
+      dueTime: input.dueTime || null,
+      estimateMinutes: Number(input.estimateMinutes) || 25,
+      courseId: input.courseId || null,
+      meetingNumber: input.meetingNumber ? Number(input.meetingNumber) : null,
+      updatedAt: now
+    })
+  };
+}
+
+export function spawnNextOccurrence(task, now = Date.now()) {
+  if (task.recurrence !== 'daily' && task.recurrence !== 'weekly') return null;
+  const days = task.recurrence === 'daily' ? 1 : 7;
+  const nextDue = task.dueDate ? todayString(addDays(parseDateString(task.dueDate), days)) : todayString(addDays(new Date(now), days));
+  return makeTask({
+    text: task.text,
+    dueDate: nextDue,
+    dueTime: task.dueTime,
+    priority: task.priority,
+    category: task.category,
+    estimateMinutes: task.estimateMinutes,
+    courseId: task.courseId,
+    meetingNumber: task.meetingNumber || null,
+    type: task.type,
+    notes: task.notes,
+    subtasks: (task.subtasks || []).map((item) => ({ text: item.text, completed: false })),
+    url: task.url,
+    pinned: task.pinned,
+    recurrence: task.recurrence,
+    reminderOffsetHours: task.reminderOffsetHours
+  }, now);
+}
+
+export function addMilestones(progress, context) {
+  const milestones = new Set(progress.milestones || []);
+  if (context.taskCompleted) milestones.add('first-task');
+  if (context.sessionCompleted) milestones.add('first-run');
+  if (progress.currentStreak >= 3) milestones.add('three-day-streak');
+  if (progress.totalXp >= 100) milestones.add('level-two');
+  return { ...progress, milestones: [...milestones] };
+}
+
+export function awardConsistency(progress, dateKey) {
+  if (progress.lastConsistencyRewardDate === dateKey) return progress;
+  return { ...progress, totalXp: progress.totalXp + 5, lastConsistencyRewardDate: dateKey };
+}
+
+export function applyTaskCompletionReward(progress, task, dateKey = todayString()) {
+  if (progress.rewardedTaskIds.includes(task.id)) return progress;
+  let next = updateStreak(progress, dateKey);
+  next = awardConsistency(next, dateKey);
+  next = { ...next, totalXp: next.totalXp + getTaskXp(task), rewardedTaskIds: [...next.rewardedTaskIds, task.id] };
+  next.level = getLevel(next.totalXp);
+  return addMilestones(next, { taskCompleted: true });
+}
+
+export function applySessionReward(progress, activeSeconds, plannedMinutes = null, dateKey = todayString()) {
+  let next = updateStreak(progress, dateKey);
+  next = awardConsistency(next, dateKey);
+  next = { ...next, totalXp: next.totalXp + getSessionXp(activeSeconds, plannedMinutes) };
+  next.level = getLevel(next.totalXp);
+  return addMilestones(next, { sessionCompleted: true });
+}
+
+export function applyTaskToggle(data, taskId, now = Date.now()) {
+  const currentTarget = data.tasks.find((task) => task.id === taskId);
+  if (!currentTarget) return { ...data, message: '' };
+  const completed = !currentTarget.completed;
+  let tasks = data.tasks.map((task) => task.id === taskId
+    ? { ...task, completed, completedAt: completed ? now : null, updatedAt: now, archived: completed && task.recurrence !== 'none' ? true : task.archived && completed ? task.archived : false }
+    : task);
+  if (completed && currentTarget.recurrence !== 'none') {
+    const nextTask = spawnNextOccurrence(currentTarget, now + 1);
+    if (nextTask) tasks = [nextTask, ...tasks];
+  }
+  if (!completed) tasks = tasks.map((task) => task.id === taskId ? { ...task, archived: false } : task);
+  let progress = data.progress;
+  const dateKey = todayString(new Date(now));
+  const canReward = completed && !progress.rewardedTaskIds.includes(currentTarget.id);
+  const streakFreezeInfo = canReward ? getStreakFreezeInfo(progress, dateKey) : null;
+  if (completed) progress = applyTaskCompletionReward(progress, currentTarget, dateKey);
+  const freezeNote = streakFreezeInfo ? ` Streak diselamatkan pakai ${streakFreezeInfo.used} freeze bulan ini (sisa ${streakFreezeInfo.remainingAfter}).` : '';
+  const message = completed
+    ? (currentTarget.recurrence !== 'none' ? `Tugas selesai. Salinan berikutnya sudah dibuat. +${getTaskXp(currentTarget)} XP.${freezeNote}` : `Tugas selesai. +${getTaskXp(currentTarget)} XP.${freezeNote}`)
+    : 'Tugas dibuka kembali.';
+  return { data: { ...data, tasks, progress }, message };
+}
+
+function getStreakMonth(dateKey) {
+  const value = String(dateKey ?? '');
+  return /^\d{4}-(0[1-9]|1[0-2])-\d{2}$/.test(value) ? value.slice(0, 7) : null;
+}
+
+function getUsedStreakFreezes(progress, monthKey) {
+  if (!monthKey || progress?.streakFreezeMonth !== monthKey) return 0;
+  return Math.min(STREAK_FREEZE_LIMIT, Math.max(0, Math.floor(Number(progress?.streakFreezesUsed) || 0)));
+}
+
+export function getStreakFreezesRemaining(progress, dateKey) {
+  return STREAK_FREEZE_LIMIT - getUsedStreakFreezes(progress, getStreakMonth(dateKey));
+}
+
+function getStreakGap(progress, dateKey) {
+  if (!progress?.lastActiveDate) return null;
+  const gap = differenceInCalendarDays(parseDateString(dateKey), parseDateString(progress.lastActiveDate));
+  return Number.isFinite(gap) ? gap : null;
+}
+
+export function getStreakFreezeInfo(progress, dateKey) {
+  const gap = getStreakGap(progress, dateKey);
+  if (gap === null || gap <= 1) return null;
+  const missedDays = gap - 1;
+  const remaining = getStreakFreezesRemaining(progress, dateKey);
+  return missedDays <= remaining ? { used: missedDays, remainingAfter: remaining - missedDays } : null;
+}
+
+// Streak tersimpan hanya diperbarui saat ada aktivitas (updateStreak). Tanpa
+// selector ini, pengguna yang lama tidak membuka TaskFlow tetap melihat angka
+// streak lama seolah masih berjalan. Ini murni tampilan: tidak ada yang ditulis
+// ke storage, dan aturan freeze-nya sengaja sama persis dengan updateStreak.
+export function getDisplayStreak(progress, dateKey = todayString()) {
+  const stored = Math.max(0, Number(progress?.currentStreak) || 0);
+  const bestStreak = Math.max(0, Number(progress?.bestStreak) || 0);
+  const intact = (value) => ({ value, broken: false, bestStreak });
+  if (!stored) return intact(0);
+  const gap = getStreakGap(progress, dateKey);
+  // Tanpa lastActiveDate tidak ada dasar untuk menyatakan streak putus.
+  if (gap === null || gap <= 1) return intact(stored);
+  return getStreakFreezeInfo(progress, dateKey) ? intact(stored) : { value: 0, broken: true, bestStreak };
+}
+
+export function updateStreak(progress, dateKey) {
+  const next = { ...progress };
+  const monthKey = getStreakMonth(dateKey);
+  const usedThisMonth = getUsedStreakFreezes(progress, monthKey);
+  next.streakFreezeMonth = monthKey;
+  next.streakFreezesUsed = usedThisMonth;
+  if (next.lastActiveDate === dateKey) return next;
+  const gap = getStreakGap(next, dateKey);
+  const freezeInfo = gap > 1 ? getStreakFreezeInfo(progress, dateKey) : null;
+  next.currentStreak = gap === 1 || freezeInfo ? next.currentStreak + 1 : 1;
+  if (freezeInfo) next.streakFreezesUsed += freezeInfo.used;
+  next.bestStreak = Math.max(next.bestStreak, next.currentStreak);
+  next.lastActiveDate = dateKey;
+  return next;
+}
+
+export function formatSnapshotLabel(snapshot) {
+  const savedAt = Number(snapshot?.savedAt);
+  if (!Number.isFinite(savedAt) || savedAt <= 0) return 'tanpa tanggal';
+  return new Date(savedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+export const BACKUP_REMINDER_DAYS = 14;
+
+// Data TaskFlow hanya ada di peramban perangkat ini. Pengingat ini muncul
+// tenang di kartu backup, bukan sebagai banner global.
+export function getBackupReminder(data, now = Date.now()) {
+  const hasData = Boolean(data?.tasks?.length || data?.sessions?.length);
+  if (!hasData) return null;
+  const lastBackupAt = Number(data?.preferences?.lastBackupAt);
+  if (!Number.isFinite(lastBackupAt) || lastBackupAt <= 0) return { days: null, text: 'Kamu belum pernah membuat backup. Semua data ini hanya ada di peramban perangkat ini.' };
+  const days = Math.floor((now - lastBackupAt) / 86400000);
+  if (days < BACKUP_REMINDER_DAYS) return null;
+  return { days, text: `Backup terakhir ${days} hari lalu. Export lagi agar progresmu punya salinan di luar peramban.` };
+}
+
+export function resolveTheme(preference, systemDark) {
+  if (preference === 'dark') return 'dark';
+  if (preference === 'light') return 'light';
+  return systemDark ? 'dark' : 'light';
+}
+
+export { TASK_TYPE_LABELS };
